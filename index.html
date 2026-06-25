@@ -723,6 +723,7 @@ function resultBadge(r){
 function funcTag(v){ return v?`<span class="func-tag">${v}</span>`:'<span style="color:var(--g500)">—</span>'; }
 function esc(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function fmtDate(d){ if(!d) return '—'; const [y,m,dd]=d.split('-'); return `${dd}/${m}/${y}`; }
+function localDate(d){ d=d||new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function calcIdade(nasc){ if(!nasc) return null; const b=new Date(nasc),t=new Date(); return t.getFullYear()-b.getFullYear()-(t<new Date(t.getFullYear(),b.getMonth(),b.getDate())?1:0); }
 function toast(msg,type='ok'){
   const t=document.getElementById('toast');
@@ -734,7 +735,7 @@ function toast(msg,type='ok'){
 
 function entrevistaStatusLabel(c){
   if(c.entrevistado) return 'sim';
-  const hoje = new Date().toISOString().slice(0,10);
+  const hoje = localDate();
   if(c.dataEntrevista && c.dataEntrevista >= hoje) return 'agendado';
   return 'nao';
 }
@@ -762,7 +763,7 @@ function nextContactDate(c){
   if(!base) return null;
   const d = new Date(base);
   d.setFullYear(d.getFullYear()+1);
-  return d.toISOString().slice(0,10);
+  return localDate(d);
 }
 
 // ==================== NAVIGATION ====================
@@ -859,7 +860,7 @@ function renderDashboard(){
   renderChart('chart-interviews','doughnut',['Aprovados','Reprovados','Pendentes','Não entrev.'],[elegAprov.length,elegReprov.length,elegPend.length,elegNaoEntrev.length],['#22c55e','#ef4444','#f59e0b','#d0d7e2']);
 
   // Top candidates
-  const hoje2 = new Date().toISOString().slice(0,10);
+  const hoje2 = localDate();
   const top = candidates.filter(c=>c.classificacao===3 && !['aprovado','contratado','desistente'].includes(c.resultadoEntrevista) && !(c.dataEntrevista && c.dataEntrevista>=hoje2));
   document.getElementById('top-candidates').innerHTML = top.length ? top.map(c=>`
     <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--g200)">
@@ -872,7 +873,7 @@ function renderDashboard(){
   `).join('') : '<p style="color:var(--g500);font-size:13px">Nenhum candidato 3 estrelas pendente.</p>';
 
   // Próximas entrevistas agendadas — ordenadas por data+hora, com "Ver mais"
-  const hoje = new Date().toISOString().slice(0,10);
+  const hoje = localDate();
   const proxEntrevAll = candidates
     .filter(c=>!c.entrevistado && c.dataEntrevista && c.dataEntrevista >= hoje)
     .sort((a,b)=>{
@@ -1055,7 +1056,7 @@ function renderAgenda(){
 function markContacted(id){
   const c = candidates.find(x=>x.id===id);
   if(!c) return;
-  c.ultimoContato = new Date().toISOString().slice(0,10);
+  c.ultimoContato = localDate();
   saveData(); renderAgenda(); toast('Contato registrado para '+c.nome);
 }
 
@@ -1247,7 +1248,7 @@ function showForm(c){
       <div class="form-group"><label>Nota Final (1–5)</label><input id="f-nota" type="number" min="1" max="5" step="0.1" value="${esc(c?c.notaFinal||'':'')}"></div>
       <div class="form-group full"><label>Parecer / Análise do Currículo</label><textarea id="f-parecer">${esc(c?c.parecer||'':'')}</textarea></div>
       <div class="form-group full"><label>Observações Internas</label><textarea id="f-obs">${esc(c?c.observacoes||'':'')}</textarea></div>
-      <div class="form-group"><label>Data de Recebimento do Currículo</label><input id="f-dreceb" type="date" value="${c?c.dataRecebimento:new Date().toISOString().slice(0,10)}"></div>
+      <div class="form-group"><label>Data de Recebimento do Currículo</label><input id="f-dreceb" type="date" value="${c?c.dataRecebimento:localDate()}"></div>
     </div>
   `;
   document.getElementById('modal-footer').innerHTML = `
@@ -1308,8 +1309,8 @@ function saveCandidate(){
     notaFinal: document.getElementById('f-nota').value||null,
     parecer: document.getElementById('f-parecer').value||null,
     observacoes: document.getElementById('f-obs').value||null,
-    dataRecebimento: document.getElementById('f-dreceb').value||new Date().toISOString().slice(0,10),
-    ultimaAtualizacao: new Date().toISOString().slice(0,10),
+    dataRecebimento: document.getElementById('f-dreceb').value||localDate(),
+    ultimaAtualizacao: localDate(),
     ultimoContato: editingId ? (candidates.find(c=>c.id===editingId)?.ultimoContato||null) : null,
     experiencias: editingId ? (candidates.find(c=>c.id===editingId)?.experiencias||[]) : []
   };
@@ -1360,7 +1361,7 @@ function exportExcel(){
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Candidatos');
-  XLSX.writeFile(wb, `BancoCandidatos_CEM_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, `BancoCandidatos_CEM_${localDate()}.xlsx`);
   toast('Exportado com sucesso!');
 }
 
@@ -1388,9 +1389,9 @@ function importExcel(input){
           entrevistado: r['Entrevistado']==='Sim', dataEntrevista: r['Data Entrevista']||null,
           resultadoEntrevista: r['Resultado']||null, notaFinal: r['Nota Final']||null,
           parecer: r['Parecer']||null, observacoes: r['Observações']||null,
-          dataRecebimento: r['Data Recebimento']||new Date().toISOString().slice(0,10),
+          dataRecebimento: r['Data Recebimento']||localDate(),
           ultimoContato: r['Último Contato Network']||null,
-          ultimaAtualizacao: new Date().toISOString().slice(0,10), experiencias:[]
+          ultimaAtualizacao: localDate(), experiencias:[]
         };
         if(existing){
           const changed = JSON.stringify({...existing,ultimaAtualizacao:''})!==JSON.stringify({...obj,ultimaAtualizacao:''});
@@ -1470,9 +1471,9 @@ function importExcelSync(input){
           entrevistado: r['Entrevistado']==='Sim', dataEntrevista: r['Data Entrevista']||null,
           resultadoEntrevista: r['Resultado']||null, notaFinal: r['Nota Final']||null,
           parecer: r['Parecer']||null, observacoes: r['Observações']||null,
-          dataRecebimento: r['Data Recebimento']||new Date().toISOString().slice(0,10),
+          dataRecebimento: r['Data Recebimento']||localDate(),
           ultimoContato: r['Último Contato Network']||null,
-          ultimaAtualizacao: new Date().toISOString().slice(0,10), experiencias:[]
+          ultimaAtualizacao: localDate(), experiencias:[]
         };
         if(existing){ const i=candidates.findIndex(c=>c.id===existing.id); candidates[i]={...existing,...obj,id:existing.id,experiencias:existing.experiencias}; updated++; }
         else { candidates.unshift(obj); added++; }
@@ -1556,17 +1557,17 @@ function setStatsPeriod(mode){
   const now = new Date();
   let from, to;
   if(mode==='month'){
-    from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
-    to   = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+    from = localDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    to   = localDate(new Date(now.getFullYear(), now.getMonth()+1, 0));
   } else if(mode==='quarter'){
     const q = Math.floor(now.getMonth()/3);
-    from = new Date(now.getFullYear(), q*3, 1).toISOString().slice(0,10);
-    to   = new Date(now.getFullYear(), q*3+3, 0).toISOString().slice(0,10);
+    from = localDate(new Date(now.getFullYear(), q*3, 1));
+    to   = localDate(new Date(now.getFullYear(), q*3+3, 0));
   } else {
     // All time
     const dates = candidates.map(c=>c.dataRecebimento).filter(Boolean).sort();
     from = dates[0] || '2026-01-01';
-    to   = new Date().toISOString().slice(0,10);
+    to   = localDate();
   }
   document.getElementById('stats-from').value = from;
   document.getElementById('stats-to').value   = to;
@@ -1576,7 +1577,7 @@ function setStatsPeriod(mode){
 function renderStats(){
   const from = document.getElementById('stats-from')?.value;
   const to   = document.getElementById('stats-to')?.value;
-  const hoje = new Date().toISOString().slice(0,10);
+  const hoje = localDate();
 
   // Filter candidates by period (dataRecebimento)
   let pool = candidates;
@@ -1715,7 +1716,7 @@ function renderStatsChart(id, type, labels, data, colors){
 function exportRelatorioPDF(){
   const from = document.getElementById('stats-from')?.value;
   const to   = document.getElementById('stats-to')?.value;
-  const hoje = new Date().toISOString().slice(0,10);
+  const hoje = localDate();
 
   let pool = candidates;
   if(from && to) pool = candidates.filter(c=>{ const d=c.dataRecebimento||''; return d>=from && d<=to; });
