@@ -454,7 +454,6 @@ textarea{resize:vertical;min-height:80px}
   <div id="page-stats" class="page">
     <div class="page-header">
       <div><h2>Estatísticas</h2><p id="stats-period-label">Selecione o período para analisar</p></div>
-      <button class="btn btn-primary" onclick="exportRelatorioPDF()">📄 Exportar Relatório PDF</button>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="filters" style="flex-wrap:wrap;gap:12px;align-items:center">
@@ -771,13 +770,11 @@ const _scrollPos = {};
 let _currentPage = 'dashboard';
 function navigate(page, forceTop=false){
   // Save scroll position of current page
-  const main = document.getElementById('main');
-  if(_currentPage) _scrollPos[_currentPage] = main.scrollTop;
+  if(_currentPage) _scrollPos[_currentPage] = window.scrollY || document.documentElement.scrollTop;
 
-  // If clicking same page (double-tap) → scroll to top
+  // If same tab clicked again (double-tap) → scroll to top
   if(page === _currentPage || forceTop){
-    main.scrollTo({top:0, behavior:'smooth'});
-    // Still re-render to refresh data
+    window.scrollTo({top:0, behavior:'smooth'});
     if(page==='dashboard') renderDashboard();
     if(page==='candidatos') renderCandidatosList();
     if(page==='agenda') renderAgenda();
@@ -800,8 +797,8 @@ function navigate(page, forceTop=false){
 
   // Restore saved scroll position for this page
   setTimeout(()=>{
-    main.scrollTo({top: _scrollPos[page]||0, behavior:'instant'});
-  }, 30);
+    window.scrollTo({top: _scrollPos[page]||0, behavior:'instant'});
+  }, 50);
 }
 
 // ==================== DASHBOARD ====================
@@ -1219,7 +1216,7 @@ function showForm(c){
           <div class="star-opt${stars===1?' sel':''}" onclick="selStar(1)">⭐ 1 Estrela</div>
           <div class="star-opt fp${stars===0?' sel':''}" onclick="selStar(0)">✕ Fora do Perfil</div>
         </div>
-        <input type="hidden" id="f-stars" value="${stars}">
+        <input type="hidden" id="f-stars-val" value="${stars}">
       </div>
       <div class="form-group"><label>Entrevistado?</label>
         <select id="f-entrev-bool">
@@ -1259,7 +1256,7 @@ function showForm(c){
 let _selectedStar = '';
 function selStar(n){
   _selectedStar = n;
-  document.getElementById('f-stars').value = n;
+  document.getElementById('f-stars-val').value = n;
   document.querySelectorAll('.star-opt').forEach(el=>el.classList.remove('sel'));
   document.querySelectorAll('.star-opt')[n===3?0:n===2?1:n===1?2:3]?.classList.add('sel');
 }
@@ -1277,7 +1274,7 @@ function cancelarEntrevista(){
 function saveCandidate(){
   const nome = document.getElementById('f-nome').value.trim();
   if(!nome){ toast('Nome é obrigatório','err'); return; }
-  const starsVal = document.getElementById('f-stars').value;
+  const starsVal = document.getElementById('f-stars-val').value;
   if(starsVal===''){ toast('Selecione a classificação','err'); return; }
 
   // Duplicate check
