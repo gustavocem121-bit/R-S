@@ -1808,10 +1808,20 @@ function exportRelatorioPDF(){
 
 
 // ==================== NOTIFICAÇÕES DE ENTREVISTA ====================
+const _TG_TOKEN = '8635461679:AAG6Pu4AQOqajgTsTx3qp4NWcY9vAjuNPDg';
+const _TG_CHAT  = '7151326827';
+
+function sendTelegram(msg){
+  fetch(`https://api.telegram.org/bot${_TG_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ chat_id: _TG_CHAT, text: msg, parse_mode: 'HTML' })
+  }).catch(()=>{});
+}
+
 let _notifFired = new Set(); // evita disparar 2x para o mesmo candidato
 
 function checkEntrevistaNotifications(){
-  if(!('Notification' in window)) return;
   const now = new Date();
   candidates.forEach(c=>{
     if(!c.dataEntrevista || !c.horaEntrevista || c.entrevistado) return;
@@ -1821,10 +1831,13 @@ function checkEntrevistaNotifications(){
     const diffMin = (dt - now) / 60000;
     if(diffMin >= 0 && diffMin <= 15){
       _notifFired.add(key);
-      if(Notification.permission === 'granted'){
-        new Notification('⏰ Entrevista em ' + Math.round(diffMin) + ' min', {
+      const mins = Math.round(diffMin);
+      // Notificação Telegram
+      sendTelegram(`⏰ <b>Entrevista em ${mins} min</b>\n👤 ${c.nome}\n💼 ${c.vaga||'—'}\n🕐 ${c.horaEntrevista}`);
+      // Notificação do navegador (se permitida)
+      if('Notification' in window && Notification.permission === 'granted'){
+        new Notification('⏰ Entrevista em ' + mins + ' min', {
           body: c.nome + ' — ' + (c.vaga||'—') + ' às ' + c.horaEntrevista,
-          icon: 'https://r-s-git-main-gustavoacfirmino.vercel.app/favicon.ico',
           tag: key
         });
       }
@@ -1833,14 +1846,10 @@ function checkEntrevistaNotifications(){
 }
 
 function initNotificacoes(){
-  if(!('Notification' in window)) return;
-  if(Notification.permission === 'default'){
-    // Solicita permissão discretamente ao carregar
+  if('Notification' in window && Notification.permission === 'default'){
     Notification.requestPermission();
   }
-  // Verifica a cada 60 segundos
   setInterval(checkEntrevistaNotifications, 60000);
-  // Verifica imediatamente ao carregar
   setTimeout(checkEntrevistaNotifications, 3000);
 }
 
@@ -1858,8 +1867,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el=>{
 document.getElementById('modal-overlay').addEventListener('click',e=>{
   if(e.target===document.getElementById('modal-overlay')) closeModal();
 });
-document.getElementById('hdr-date').innerHTML = `Hoje: ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}`;
-
+document.getElementById('hdr-date').innerHTML = new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
 loadPerfis();
 (async()=>{
   const _ov = document.getElementById('loading-overlay');
@@ -1870,5 +1878,5 @@ loadPerfis();
   initNotificacoes();
 })();
 </script>
-
 </body></html>
+body></html>
