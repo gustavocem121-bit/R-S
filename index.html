@@ -810,42 +810,39 @@ function fetchJSONP(url){
 async function loadData(){
   try {
     const data = await fetchJSONP(API_URL);
-    // Suporta formato novo {candidates, perfis} e formato antigo (array)
     let cands, prfs;
     if(data && !Array.isArray(data) && data.candidates){
-      cands = data.candidates;
-      prfs  = data.perfis;
+      cands = data.candidates; prfs = data.perfis;
     } else if(Array.isArray(data)){
-      cands = data;
-      prfs  = null;
+      cands = data; prfs = null;
     }
     const validCands = cands && cands.length > 0 && cands[0] && cands[0].nome;
     if(validCands){
       candidates = cands;
-      // Merge: adiciona candidatos novos do INITIAL_CANDIDATES que não existem na nuvem
-      const cloudIds = new Set(candidates.map(c=>c.id));
-      const novos = INITIAL_CANDIDATES.filter(c=>!cloudIds.has(c.id));
-      if(novos.length > 0){
-        candidates = candidates.concat(novos.map(c=>({...c})));
-        syncToCloud(); // persiste os novos na nuvem automaticamente
-        toast(`${novos.length} novo(s) candidato(s) adicionado(s) ao banco.`,'ok');
-      }
       localStorage.setItem('rs_candidates', JSON.stringify(candidates));
       if(prfs && prfs.length > 0){
         perfis = prfs;
         localStorage.setItem('rs_perfis', JSON.stringify(perfis));
       }
     } else {
-      // Nuvem vazia — carrega banco inicial e sincroniza
-      candidates = INITIAL_CANDIDATES.map(c=>({...c}));
-      localStorage.removeItem('rs_candidates');
-      syncToCloud();
+      // Nuvem vazia — usa localStorage ou banco inicial
+      const saved = localStorage.getItem('rs_candidates');
+      if(saved){ candidates = JSON.parse(saved); }
+      else { candidates = INITIAL_CANDIDATES.map(c=>({...c})); syncToCloud(); }
     }
   } catch(err){
-    candidates = INITIAL_CANDIDATES.map(c=>({...c}));
-    toast('⚠️ Sem conexão com o servidor — dados padrão carregados','err');
+    // Falha de rede — tenta localStorage antes de usar dados hardcoded
+    const saved = localStorage.getItem('rs_candidates');
+    if(saved){
+      candidates = JSON.parse(saved);
+      toast('⚠️ Servidor indisponível — exibindo último backup local','warn');
+    } else {
+      candidates = INITIAL_CANDIDATES.map(c=>({...c}));
+      toast('⚠️ Sem conexão e sem backup local — dados iniciais carregados','err');
+    }
+    // Retry automático em 30s
+    setTimeout(()=>loadData().then(()=>renderDashboard()), 30000);
   }
-  // overlay escondido pelo initApp, após renderDashboard()
 }
 
 function saveData(){
