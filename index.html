@@ -1,0 +1,2056 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&S — Recrutamento & Seleção</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay" style="display:none;position:fixed;inset:0;background:rgba(13,27,42,.95);z-index:400;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <div style="font-size:48px">📋</div>
+  <div style="color:var(--gold);font-size:20px;font-weight:800">Carregando dados...</div>
+  <div style="color:var(--g300);font-size:13px">Sincronizando com o Google Sheets</div>
+  <div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.1);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin-top:8px"></div>
+</div>
+
+<!-- STARTUP SYNC MODAL (desativado - usando Google Sheets) -->
+<div id="sync-overlay" style="display:none;position:fixed;inset:0;background:rgba(13,27,42,.92);z-index:300;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--white);border-radius:16px;max-width:420px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.4);overflow:hidden">
+    <div style="background:var(--navy);padding:22px 24px;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">R&S</div>
+      <div style="color:var(--gold);font-size:18px;font-weight:800">Recrutamento & Seleção</div>
+      <div style="color:var(--g300);font-size:12px;margin-top:4px">Filial 107 — Barra Mansa, RJ</div>
+    </div>
+    <div style="padding:24px">
+      <div id="sync-info" style="background:var(--g100);border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:13px;color:var(--g700);line-height:1.6"></div>
+      <p style="font-size:13px;color:var(--g700);margin-bottom:16px;line-height:1.6">
+        <strong>💡 Dica de sincronização:</strong> se você atualizou os dados em outro dispositivo, exporte o Excel de lá e carregue aqui para sincronizar.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:14px" onclick="loadFromExcelSync()">
+          📂 Carregar planilha Excel (sincronizar)
+        </button>
+        <button class="btn btn-outline" style="width:100%;justify-content:center;padding:12px;font-size:14px" onclick="continueLocal()">
+          ▶ Continuar com dados locais
+        </button>
+      </div>
+      <input type="file" id="sync-file" accept=".xlsx,.xls" style="display:none" onchange="importExcelSync(this)">
+    </div>
+    <div style="padding:0 24px 20px;text-align:center">
+      <label style="display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-size:12px;color:var(--g500)">
+        <input type="checkbox" id="skip-sync" style="width:auto"> Não mostrar ao abrir (usar sempre dados locais)
+      </label>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL AGENDAR ENTREVISTA -->
+<div id="agendar-overlay" style="display:none;position:fixed;inset:0;background:rgba(13,27,42,.7);z-index:500;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--white);border-radius:16px;max-width:380px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden">
+    <div style="background:var(--navy);padding:18px 22px;display:flex;align-items:center;justify-content:space-between">
+      <div style="color:var(--gold);font-weight:800;font-size:16px">📅 Agendar Entrevista</div>
+      <button onclick="closeAgendar()" style="background:none;border:none;color:var(--g300);font-size:20px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="padding:22px">
+      <div id="agendar-nome" style="font-weight:700;font-size:15px;color:var(--navy);margin-bottom:4px"></div>
+      <div id="agendar-tel" style="font-size:12px;color:var(--g500);margin-bottom:18px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--g600);display:block;margin-bottom:4px">Data</label>
+          <input type="date" id="agendar-data" style="width:100%;padding:9px 10px;border:1.5px solid var(--g300);border-radius:8px;font-size:14px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--g600);display:block;margin-bottom:4px">Hora</label>
+          <input type="time" id="agendar-hora" style="width:100%;padding:9px 10px;border:1.5px solid var(--g300);border-radius:8px;font-size:14px;box-sizing:border-box">
+        </div>
+      </div>
+      <div style="background:var(--g100);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--g700);line-height:1.6;margin-bottom:18px" id="agendar-preview"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:14px;gap:8px" onclick="enviarWhatsApp()">
+        💬 Enviar pelo WhatsApp
+      </button>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{--navy:#0D1B2A;--navy2:#152338;--navy3:#1d3050;--gold:#C9A02C;--gold2:#e8c04a;--gold3:#8a6e1a;--white:#fff;--g100:#f4f6f9;--g200:#e8ecf1;--g300:#d0d7e2;--g500:#8a96a8;--g700:#4a5568;--green:#22c55e;--red:#ef4444;--orange:#f59e0b;--blue:#3b82f6;--sidebar:220px;--hdr:60px;--radius:10px;--shadow:0 2px 12px rgba(0,0,0,.12)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--g100);color:var(--navy);min-height:100vh;display:flex;flex-direction:column}
+/* HEADER */
+#hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr);background:var(--navy);display:flex;align-items:center;padding:0 20px;gap:14px;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#hdr .logo-icon{width:36px;height:36px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:var(--navy);flex-shrink:0}
+#hdr .logo-text{color:var(--white);font-size:18px;font-weight:700;letter-spacing:.5px}
+#hdr .logo-text span{color:var(--gold)}
+#hdr .spacer{flex:1}
+#hdr .hdr-info{color:var(--g300);font-size:12px;text-align:right}
+/* SIDEBAR */
+#sidebar{position:fixed;top:var(--hdr);left:0;width:var(--sidebar);height:calc(100vh - var(--hdr));background:var(--navy2);padding:20px 0;overflow-y:auto;z-index:90}
+#sidebar .nav-section{padding:0 14px;margin-bottom:6px;font-size:10px;font-weight:700;color:var(--g500);letter-spacing:1px;text-transform:uppercase}
+#sidebar .nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;transition:.2s;color:var(--g300);font-size:14px;border-left:3px solid transparent}
+#sidebar .nav-item:hover{background:rgba(201,160,44,.08);color:var(--white)}
+#sidebar .nav-item.active{background:rgba(201,160,44,.12);color:var(--gold);border-left-color:var(--gold);font-weight:600}
+#sidebar .nav-item .icon{font-size:16px;width:20px;text-align:center}
+/* MAIN */
+#main{margin-left:var(--sidebar);margin-top:var(--hdr);min-height:calc(100vh - var(--hdr));padding:24px}
+/* PAGES */
+.page{display:none}.page.active{display:block}
+/* CARDS */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+.card-title{font-size:14px;font-weight:700;color:var(--g700);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+/* STAT CARDS */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;display:flex;flex-direction:column;gap:4px;border-left:4px solid var(--gold);cursor:pointer;transition:.18s;-webkit-tap-highlight-color:transparent}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.15)}
+.stat-card:active{transform:scale(.97)}
+.stat-card.blue{border-left-color:var(--blue)}
+.stat-card.green{border-left-color:var(--green)}
+.stat-card.red{border-left-color:var(--red)}
+.stat-card.orange{border-left-color:var(--orange)}
+.stat-label{font-size:11px;color:var(--g500);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.stat-value{font-size:32px;font-weight:800;color:var(--navy)}
+.stat-sub{font-size:11px;color:var(--g500)}
+/* CHARTS GRID */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px}
+@media(max-width:900px){.charts-grid{grid-template-columns:1fr 1fr}}
+/* TABLE */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--navy);color:var(--white);padding:10px 12px;text-align:left;font-weight:600;font-size:12px;position:sticky;top:0}
+td{padding:10px 12px;border-bottom:1px solid var(--g200);vertical-align:middle}
+tr:hover td{background:rgba(201,160,44,.04)}
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.badge-3{background:#fef3c7;color:#92400e}
+.badge-2{background:#dbeafe;color:#1e40af}
+.badge-1{background:#f3f4f6;color:#374151}
+.badge-fp{background:#fee2e2;color:#991b1b}
+.badge-green{background:#dcfce7;color:#166534}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-orange{background:#fff7ed;color:#9a3412}
+.badge-blue{background:#eff6ff;color:#1e40af}
+.badge-gray{background:#f3f4f6;color:#374151}
+/* STARS */
+.stars{color:var(--gold);font-size:13px;letter-spacing:-1px}
+.stars.s1::before{content:'★☆☆'}
+.stars.s2::before{content:'★★☆'}
+.stars.s3::before{content:'★★★'}
+.stars.s0::before{content:'—';color:var(--g500);font-size:12px}
+/* FILTERS */
+.filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center}
+.filter-select,.search-input{padding:8px 12px;border:1px solid var(--g300);border-radius:6px;font-size:13px;background:var(--white);color:var(--navy);outline:none;cursor:pointer}
+.filter-select:focus,.search-input:focus{border-color:var(--gold)}
+.search-input{min-width:220px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.2s;text-decoration:none}
+.btn-primary{background:var(--gold);color:var(--navy)}
+.btn-primary:hover{background:var(--gold2)}
+.btn-outline{background:transparent;color:var(--navy);border:1px solid var(--g300)}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
+.btn-danger{background:var(--red);color:var(--white)}
+.btn-sm{padding:5px 10px;font-size:12px}
+/* PAGE HEADER */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.page-header h2{font-size:22px;font-weight:800;color:var(--navy)}
+.page-header p{font-size:13px;color:var(--g500);margin-top:2px}
+/* MODAL */
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center;padding:20px}
+#modal-overlay.open{display:flex}
+#modal-box{background:var(--white);border-radius:14px;max-width:720px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-hdr{background:var(--navy);color:var(--white);padding:18px 24px;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1}
+.modal-hdr h3{font-size:17px;font-weight:700}
+.modal-hdr .close{cursor:pointer;font-size:22px;color:var(--g300);line-height:1;background:none;border:none;color:var(--g300)}
+.modal-body{padding:24px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--g200);display:flex;gap:10px;justify-content:flex-end;position:sticky;bottom:0;background:var(--white);border-radius:0 0 14px 14px}
+/* FORM */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group.full{grid-column:1/-1}
+label{font-size:12px;font-weight:700;color:var(--g700);text-transform:uppercase;letter-spacing:.4px}
+input,select,textarea{padding:9px 12px;border:1px solid var(--g300);border-radius:6px;font-size:13px;background:var(--white);color:var(--navy);outline:none;font-family:inherit;transition:.2s}
+input:focus,select:focus,textarea:focus{border-color:var(--gold)}
+textarea{resize:vertical;min-height:80px}
+.star-selector{display:flex;gap:8px;flex-wrap:wrap}
+.star-opt{padding:6px 14px;border-radius:20px;border:2px solid var(--g300);cursor:pointer;font-size:12px;font-weight:700;transition:.2s}
+.star-opt:hover,.star-opt.sel{border-color:var(--gold);background:rgba(201,160,44,.1);color:var(--navy)}
+.star-opt.fp.sel{border-color:var(--red);background:#fee2e2;color:var(--red)}
+/* DETAIL SECTIONS */
+.detail-section{margin-bottom:18px}
+.detail-section h4{font-size:12px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--g200);padding-bottom:6px;margin-bottom:10px}
+.detail-row{display:grid;grid-template-columns:140px 1fr;gap:6px;margin-bottom:6px;font-size:13px}
+.detail-row .lbl{color:var(--g500);font-weight:600}
+.exp-item{background:var(--g100);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:13px}
+.exp-item .cargo{font-weight:700;color:var(--navy)}
+.exp-item .emp{color:var(--g500)}.exp-item .per{color:var(--g700);font-size:12px}
+/* AGENDA */
+.agenda-item{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:8px;background:var(--white);box-shadow:var(--shadow);margin-bottom:10px;transition:.2s}
+.agenda-item:hover{transform:translateY(-1px)}
+.agenda-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot-overdue{background:var(--red)}
+.dot-soon{background:var(--orange)}
+.dot-ok{background:var(--green)}
+.agenda-name{font-weight:700;font-size:14px;color:var(--navy)}
+.agenda-meta{font-size:12px;color:var(--g500)}
+/* PERFIS */
+.profile-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px}
+.profile-hdr{background:var(--navy);color:var(--white);padding:14px 20px;display:flex;align-items:center;gap:10px}
+.profile-hdr h3{font-size:16px;font-weight:700}
+.profile-body{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.profile-list{font-size:13px;line-height:1.9;color:var(--g700)}
+.profile-list li{list-style:none;display:flex;gap:6px;align-items:flex-start}
+.profile-list li::before{content:'✓';color:var(--gold);font-weight:900;flex-shrink:0}
+/* TAGS */
+.func-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:var(--navy3);color:var(--white)}
+/* TOAST */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:var(--white);padding:12px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:999;display:none;box-shadow:var(--shadow);max-width:300px;border-left:4px solid var(--gold)}
+/* SECTION DIVIDER */
+.section-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.ai-box{background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:var(--radius);padding:20px;color:var(--white)}
+.ai-box h4{color:var(--gold);font-size:14px;font-weight:700;margin-bottom:10px}
+.ai-box p{font-size:12px;color:var(--g300);line-height:1.7}
+.ai-box .criteria{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.ai-box .criteria span{background:rgba(201,160,44,.15);border:1px solid rgba(201,160,44,.3);color:var(--gold2);padding:3px 8px;border-radius:4px;font-size:11px}
+/* ===== MOBILE BOTTOM NAV ===== */
+#mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:62px;background:var(--navy);z-index:100;border-top:1px solid rgba(255,255,255,.1);box-shadow:0 -4px 24px rgba(0,0,0,.35)}
+#mobile-nav .mnav{display:flex;height:100%;align-items:stretch}
+.mitem{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--g500);font-size:10px;font-weight:600;border:none;background:none;padding:6px 0;transition:.15s;-webkit-tap-highlight-color:transparent}
+.mitem .micon{font-size:22px;line-height:1;transition:.15s}
+.mitem.active{color:var(--gold)}
+.mitem.active .micon{transform:scale(1.15)}
+/* FAB */
+#fab{display:none;position:fixed;bottom:74px;right:16px;width:54px;height:54px;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:50%;border:none;font-size:26px;color:var(--navy);cursor:pointer;box-shadow:0 4px 20px rgba(201,160,44,.55);z-index:99;align-items:center;justify-content:center;font-weight:900;transition:.2s;-webkit-tap-highlight-color:transparent}
+#fab:active{transform:scale(.92)}
+/* Mobile candidate cards */
+#mobile-cards{display:none}
+.m-card{background:var(--white);border-radius:12px;box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px;border-left:4px solid var(--g300);cursor:pointer;transition:.15s;-webkit-tap-highlight-color:transparent}
+.m-card:active{transform:scale(.985)}
+.m-card.s3{border-left-color:var(--gold)}
+.m-card.s2{border-left-color:var(--blue)}
+.m-card.s1{border-left-color:var(--g400)}
+.m-card.s0{border-left-color:var(--red)}
+.m-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px}
+.m-card-name{font-weight:800;font-size:15px;color:var(--navy);line-height:1.3}
+.m-card-meta{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.m-card-actions{display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--g200)}
+.m-card-actions .btn{flex:1;justify-content:center;padding:8px;font-size:12px}
+/* ===== RESPONSIVE ===== */
+@media(max-width:768px){
+  #sidebar{display:none}
+  #mobile-nav,#fab{display:flex}
+  #mobile-nav{display:block}
+  #main{margin-left:0;padding:14px 12px 80px}
+  #hdr{padding:0 14px;height:54px}
+  #hdr .logo-text{font-size:15px}
+  #hdr .hdr-info{font-size:10px}
+  :root{--hdr:54px}
+  .page-header{flex-direction:column;align-items:flex-start;gap:6px;margin-bottom:14px}
+  .page-header>.btn{display:none}
+  .page-header h2{font-size:19px}
+  .page-header p{font-size:12px}
+  /* Stats 2 cols */
+  .stats-grid{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .stat-card{padding:12px 11px}
+  .stat-value{font-size:26px}
+  .stat-label{font-size:10px}
+  .stat-sub{font-size:10px}
+  /* Charts 1 col */
+  .charts-grid{grid-template-columns:1fr;gap:12px;margin-bottom:14px}
+  /* Sections 1 col */
+  .section-row{grid-template-columns:1fr;gap:12px}
+  /* Forms 1 col */
+  .form-grid{grid-template-columns:1fr}
+  .form-group.full{grid-column:1}
+  /* Profiles 1 col */
+  .profile-body{grid-template-columns:1fr;gap:12px}
+  /* Cards */
+  .card{padding:13px}
+  .card-title{font-size:13px}
+  /* Filters horizontal scroll */
+  .filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;gap:7px;scrollbar-width:none;margin-bottom:12px}
+  .filters::-webkit-scrollbar{display:none}
+  .filter-select,.search-input{flex-shrink:0;font-size:12px;padding:7px 10px;min-width:auto}
+  .search-input{min-width:150px}
+  /* Show cards, hide table */
+  .table-wrap{display:none}
+  #mobile-cards{display:block}
+  /* Modal bottom sheet */
+  #modal-overlay{padding:0;align-items:flex-end}
+  #modal-box{max-width:100%;width:100%;max-height:92vh;border-radius:18px 18px 0 0}
+  .modal-hdr{border-radius:18px 18px 0 0;padding:14px 18px}
+  .modal-hdr h3{font-size:16px}
+  .modal-body{padding:14px 16px}
+  .modal-footer{padding:12px 16px;flex-wrap:wrap}
+  .modal-footer .btn{flex:1;justify-content:center;font-size:12px;padding:9px 8px}
+  /* Buttons */
+  .btn{padding:9px 14px;font-size:13px}
+  .btn-sm{padding:7px 11px;font-size:12px}
+  /* Agenda */
+  .agenda-item{flex-wrap:wrap}
+  .agenda-item>div:last-child{width:100%;justify-content:flex-end;display:flex;gap:8px}
+  /* Detail rows */
+  .detail-row{grid-template-columns:110px 1fr;font-size:12px}
+  /* AI box */
+  .ai-box{padding:14px}
+  .ai-box .criteria span{font-size:10px;padding:2px 6px}
+  /* Star selector */
+  .star-selector{gap:6px}
+  .star-opt{font-size:11px;padding:5px 10px}
+}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== SPLASH SCREEN ===== */
+#splash-screen{position:fixed;inset:0;z-index:9999;background:#0D1B2A;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.splash-logo{width:160px;height:160px;border-radius:24px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.7);margin-bottom:22px}
+.splash-logo img{width:100%;height:100%;object-fit:cover}
+.splash-title{font-size:24px;font-weight:900;color:#fff;text-align:center;margin-bottom:4px;letter-spacing:.5px}
+.splash-title span{color:var(--gold)}
+.splash-sub{font-size:13px;color:rgba(255,255,255,.38);margin-bottom:36px;text-align:center;letter-spacing:.3px}
+.splash-btns{display:flex;flex-direction:column;gap:10px;width:290px}
+.splash-btn{padding:13px 20px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;border:none;text-align:center;transition:.18s}
+.splash-btn-primary{background:var(--gold);color:var(--navy)}
+.splash-btn-primary:hover{background:var(--gold2)}
+.splash-btn-guest{background:rgba(255,255,255,.07);color:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.14)}
+.splash-btn-guest:hover{background:rgba(255,255,255,.12)}
+.splash-divider{color:rgba(255,255,255,.22);font-size:11px;text-align:center}
+.splash-form{display:none;flex-direction:column;gap:10px;width:290px}
+.splash-form.active{display:flex}
+.splash-input{padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:16px;outline:none;transition:.18s}
+.splash-input:focus{border-color:var(--gold)}
+.splash-input::placeholder{color:rgba(255,255,255,.28)}
+.splash-err{font-size:12px;color:#F87171;text-align:center;min-height:18px}
+.splash-back{font-size:12px;color:rgba(255,255,255,.32);cursor:pointer;text-align:center;margin-top:2px}
+.splash-back:hover{color:rgba(255,255,255,.6)}
+#_ubadge{font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;background:rgba(255,255,255,.08);cursor:pointer;border:1px solid rgba(255,255,255,.18);color:var(--g300);margin-right:8px;transition:.18s}
+#_ubadge:hover{background:rgba(255,255,255,.15)}
+</style>
+</head>
+<body>
+
+<div id="splash-screen">
+  <div class="splash-logo">
+    <img src="data:image/jpeg;base64,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" alt="R&S">
+  </div>
+  <div class="splash-title"><span>R&S</span> — Recrutamento & Seleção</div>
+  <div class="splash-sub">Filial 107 · Barra Mansa, RJ</div>
+  <div class="splash-btns" id="splash-main">
+    <button class="splash-btn splash-btn-primary"
+      onclick="document.getElementById('splash-main').style.display='none';document.getElementById('splash-login-form').classList.add('active');setTimeout(function(){document.getElementById('splash-user').focus();},80)">
+      🔐 Entrar como Gestor
+    </button>
+    <div class="splash-divider">ou</div>
+    <button class="splash-btn splash-btn-guest"
+      onclick="window.SESSION_TYPE='guest';try{localStorage.setItem('rs_session','guest')}catch(e){};_hideSplash();">
+      👁 Continuar como Convidado
+    </button>
+  </div>
+  <div class="splash-form" id="splash-login-form">
+    <div style="font-size:12px;color:rgba(255,255,255,.35);text-align:center;margin-bottom:2px">Acesso restrito — Gestores</div>
+    <input class="splash-input" id="splash-user" type="text" placeholder="Usuário" autocomplete="username"
+      onkeydown="if(event.key==='Enter')document.getElementById('splash-pass').focus()">
+    <input class="splash-input" id="splash-pass" type="password" placeholder="Senha" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')_splashLogin()">
+    <div class="splash-err" id="splash-err"></div>
+    <button class="splash-btn splash-btn-primary" onclick="_splashLogin()">Entrar</button>
+    <div class="splash-back"
+      onclick="document.getElementById('splash-main').style.display='';document.getElementById('splash-login-form').classList.remove('active');document.getElementById('splash-err').textContent=''">
+      ← Voltar
+    </div>
+  </div>
+</div>
+
+<div id="hdr">
+  <div class="logo-icon">R&S</div>
+  <div class="logo-text"><span>R&S</span> Recrutamento & Seleção</div>
+  <div class="spacer"></div>
+  <div class="hdr-info" id="hdr-date"></div>
+</div>
+
+<nav id="sidebar">
+  <div style="padding:16px 20px 20px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:12px">
+    <div style="font-size:11px;color:var(--g500);font-weight:700;text-transform:uppercase;letter-spacing:1px">Filial 107</div>
+    <div style="font-size:13px;color:var(--g300);margin-top:2px">Barra Mansa, RJ</div>
+  </div>
+  <div class="nav-section" style="margin-top:8px">Menu</div>
+  <div class="nav-item active" data-page="dashboard"><span class="icon">📊</span> Dashboard</div>
+  <div class="nav-item" data-page="candidatos"><span class="icon">👥</span> Candidatos</div>
+  <div class="nav-item" data-page="agenda"><span class="icon">📅</span> Agenda / Network</div>
+  <div class="nav-item" data-page="perfis"><span class="icon">📋</span> Perfis das Vagas</div>
+  <div class="nav-item" data-page="stats"><span class="icon">📈</span> Estatísticas</div>
+  <div style="margin-top:24px;padding:0 14px;margin-bottom:6px" class="nav-section">Ferramentas</div>
+  <div class="nav-item" onclick="openNewCandidate()"><span class="icon">➕</span> Novo Candidato</div>
+  <div class="nav-item" onclick="exportExcel()"><span class="icon">📥</span> Exportar Excel</div>
+  <div class="nav-item" onclick="document.getElementById('import-file').click()"><span class="icon">📤</span> Importar Excel</div>
+  <div class="nav-item" onclick="localStorage.removeItem('rs_skip_sync');location.reload()"><span class="icon">🔄</span> Sincronizar dados</div>
+  <div style="margin-top:auto;padding:16px 14px 20px;border-top:1px solid rgba(255,255,255,.06)">
+    <div id="sidebar-sess" style="font-size:11px;color:var(--g500);margin-bottom:10px;padding:0 6px"></div>
+    <button onclick="localStorage.removeItem('rs_session');location.reload()" style="width:100%;padding:9px 14px;background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.25);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;transition:.18s" onmouseover="this.style.background='rgba(239,68,68,.22)'" onmouseout="this.style.background='rgba(239,68,68,.12)'">
+      <span>🚪</span> Sair
+    </button>
+  </div>
+  <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)">
+</nav>
+
+<!-- MOBILE BOTTOM NAV -->
+<div id="mobile-nav">
+  <div class="mnav">
+    <button class="mitem active" data-page="dashboard" onclick="navigate('dashboard', 'dashboard'===_currentPage)"><span class="micon">📊</span>Dashboard</button>
+    <button class="mitem" data-page="candidatos" onclick="navigate('candidatos', 'candidatos'===_currentPage)"><span class="micon">👥</span>Candidatos</button>
+    <button class="mitem" data-page="agenda" onclick="navigate('agenda', 'agenda'===_currentPage)"><span class="micon">📅</span>Agenda</button>
+    <button class="mitem" data-page="perfis" onclick="navigate('perfis', 'perfis'===_currentPage)"><span class="micon">📋</span>Perfis</button>
+    <button class="mitem" data-page="stats" onclick="navigate('stats', 'stats'===_currentPage)"><span class="micon">📈</span>Stats</button>
+    <button class="mitem" onclick="showMobileTools()"><span class="micon">⚙️</span>Mais</button>
+  </div>
+</div>
+<!-- FAB -->
+<button id="fab" onclick="openNewCandidate()" title="Novo Candidato">+</button>
+
+<main id="main">
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <div class="page-header">
+      <div><h2>Dashboard</h2><p>Visão geral do banco de candidatos</p></div>
+      <button class="btn btn-primary" onclick="openNewCandidate()">+ Novo Candidato</button>
+    </div>
+    <div class="stats-grid" id="stats-grid"></div>
+    <div class="section-row">
+      <div class="card">
+        <div class="card-title">⭐⭐⭐ Indicados para Entrevista</div>
+        <div id="top-candidates"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🗓️ Próximas Entrevistas Agendadas</div>
+        <div id="upcoming-interviews"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📅 Próximos Contatos de Network</div>
+        <div id="upcoming-reminders"></div>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="card"><div class="card-title">📁 Por Função</div><canvas id="chart-func" height="200"></canvas></div>
+      <div class="card"><div class="card-title">⭐ Classificação</div><canvas id="chart-stars" height="200"></canvas></div>
+      <div class="card"><div class="card-title">🎯 Entrevistas</div><canvas id="chart-interviews" height="200"></canvas></div>
+    </div>
+  </div>
+
+  <!-- CANDIDATOS -->
+  <div id="page-candidatos" class="page">
+    <div class="page-header">
+      <div><h2>Banco de Candidatos</h2><p id="candidatos-count"></p></div>
+      <button class="btn btn-primary" onclick="openNewCandidate()">+ Novo Candidato</button>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="filters">
+        <input type="text" class="search-input" id="search" placeholder="🔍  Buscar por nome..." oninput="renderCandidatosList()">
+        <select class="filter-select" id="f-func" onchange="renderCandidatosList()">
+          <option value="">Todas as Funções</option>
+          <option>Vendedor</option><option>Vendedora</option><option>Recebedora/Caixa</option>
+          <option>Recebedora/Vendedora</option><option>Vendedora/Recebedora</option>
+          <option>Montador</option><option>Auxiliar de Serviços Gerais</option>
+        </select>
+        <select class="filter-select" id="f-stars" onchange="renderCandidatosList()">
+          <option value="">Todas as Classificações</option>
+          <option value="3">⭐⭐⭐ 3 Estrelas</option>
+          <option value="2">⭐⭐ 2 Estrelas</option>
+          <option value="1">⭐ 1 Estrela</option>
+          <option value="0">Fora do Perfil</option>
+        </select>
+        <select class="filter-select" id="f-entrev" onchange="renderCandidatosList()">
+          <option value="">Entrev. — Todos</option>
+          <option value="sim">Entrevistados</option>
+          <option value="agendado">Agendados</option>
+          <option value="nao">Não Entrevistados</option>
+        </select>
+        <select class="filter-select" id="f-result-status" onchange="renderCandidatosList()">
+          <option value="">Resultado — Todos</option>
+          <option value="contratado">🏆 Contratados</option>
+          <option value="aprovado">✓ Aprovados</option>
+          <option value="reprovado">✗ Reprovados</option>
+          <option value="desistente">🚫 Desistentes</option>
+          <option value="pendente">⏳ Pendentes</option>
+        </select>
+        <select class="filter-select" id="f-order" onchange="renderCandidatosList()">
+          <option value="recentes">Mais Recentes</option>
+          <option value="stars">Mais Recomendados</option>
+          <option value="nome">Nome A–Z</option>
+        </select>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th><th>Função</th><th>Classificação</th><th>Cidade</th>
+              <th>Recebido em</th><th>Entrevistado</th><th>Resultado</th><th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="candidatos-tbody"></tbody>
+        </table>
+      </div>
+      <!-- MOBILE CARDS -->
+      <div id="mobile-cards"></div>
+    </div>
+  </div>
+
+  <!-- AGENDA -->
+  <div id="page-agenda" class="page">
+    <div class="page-header">
+      <div><h2>Agenda & Network</h2><p>Lembrete anual de atualização de cadastro para candidatos do banco</p></div>
+    </div>
+    <div class="stats-grid" id="agenda-stats"></div>
+    <div class="card">
+      <div class="card-title">📅 Candidatos a Contatar</div>
+      <div class="filters">
+        <select class="filter-select" id="agenda-filter" onchange="renderAgenda()">
+          <option value="todos">Todos</option>
+          <option value="atrasado">Vencidos</option>
+          <option value="em_breve">Próximos 30 dias</option>
+          <option value="ok">Em dia</option>
+        </select>
+      </div>
+      <div id="agenda-list"></div>
+    </div>
+  </div>
+
+  <!-- ESTATÍSTICAS -->
+  <div id="page-stats" class="page">
+    <div class="page-header">
+      <div><h2>Estatísticas</h2><p id="stats-period-label">Selecione o período para analisar</p></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="filters" style="flex-wrap:wrap;gap:12px;align-items:center">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <label style="font-size:13px;color:var(--g600);font-weight:600">De:</label>
+          <input type="date" id="stats-from" class="filter-select" style="width:150px" onchange="renderStats()">
+          <label style="font-size:13px;color:var(--g600);font-weight:600">Até:</label>
+          <input type="date" id="stats-to" class="filter-select" style="width:150px" onchange="renderStats()">
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="setStatsPeriod('month')">Mês Atual</button>
+        <button class="btn btn-outline btn-sm" onclick="setStatsPeriod('quarter')">Trimestre</button>
+        <button class="btn btn-outline btn-sm" onclick="setStatsPeriod('all')">Todo o Período</button>
+        <button class="btn btn-primary btn-sm" onclick="exportRelatorioPDF()" style="margin-left:auto">📄 Exportar PDF</button>
+      </div>
+    </div>
+    <div class="stats-grid" id="stats-summary-grid"></div>
+    <div class="charts-grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr));margin-bottom:16px">
+      <div class="card"><div class="card-title">📁 Currículos por Função</div><canvas id="st-func" height="220"></canvas></div>
+      <div class="card"><div class="card-title">⭐ Distribuição por Estrelas</div><canvas id="st-stars" height="220"></canvas></div>
+      <div class="card"><div class="card-title">🎯 Resultado das Entrevistas</div><canvas id="st-result" height="220"></canvas></div>
+      <div class="card"><div class="card-title">📊 Situação dos Candidatos</div><canvas id="st-status" height="220"></canvas></div>
+    </div>
+    <div class="section-row" style="margin-top:0">
+      <div class="card">
+        <div class="card-title">⭐⭐⭐ Recomendados para Entrevista</div>
+        <div id="stats-top-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🗓️ Entrevistas Agendadas (Pendentes)</div>
+        <div id="stats-agend-list"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">🏆 Contratados no Período</div>
+      <div id="stats-contratados-list"></div>
+    </div>
+  </div>
+
+  <!-- PERFIS -->
+  <div id="page-perfis" class="page">
+    <div class="page-header">
+      <div><h2>Perfis das Vagas</h2><p>Parâmetros oficiais CEM para avaliação de candidatos</p></div>
+    </div>
+    <div class="ai-box" style="margin-bottom:20px">
+      <h4>🤖 Como usar com IA para avaliar currículos</h4>
+      <p>Ao receber um currículo novo, utilize os critérios abaixo como parâmetro. Copie o conteúdo do currículo e solicite à IA: <em>"Avalie este candidato para a vaga de [Função] com base nos critérios do perfil CEM e classifique em 1, 2 ou 3 estrelas."</em></p>
+      <div style="margin-top:12px;padding:10px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px">
+        <div style="font-weight:700;color:#92400e;font-size:13px;margin-bottom:4px">⚠️ Critério Eliminatório — Escolaridade</div>
+        <p style="margin:0;font-size:12px;color:#78350f">Ensino Médio Completo é <strong>obrigatório para todas as funções</strong>, com exceção de <strong>Montador de Móveis</strong> e <strong>Auxiliar de Serviços Gerais</strong>. Candidatos em outras funções sem ensino médio completo devem ser classificados como <strong>Fora do Perfil</strong>, independentemente do histórico profissional.</p>
+      </div>
+      <div class="criteria">
+        <span>Estabilidade nos empregos</span><span>Formação escolar</span><span>Experiência na área</span>
+        <span>Idade e maturidade</span><span>Cuidado com o currículo</span><span>Aderência ao perfil</span>
+        <span>Competências técnicas</span><span>Idoneidade</span>
+      </div>
+    </div>
+    <div id="perfis-list"></div>
+  </div>
+</main>
+
+<!-- MODAL -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div class="modal-hdr">
+      <h3 id="modal-title">Candidato</h3>
+      <button class="close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ==================== SPLASH / AUTH ====================
+var SESSION_TYPE = null;
+var _SPLASH_USER = 'gestor';
+var _SPLASH_PASS = 'cem107';
+
+function _hideSplash(){
+  var el = document.getElementById('splash-screen');
+  if(el){ el.style.opacity='0'; el.style.transition='opacity .3s';
+    setTimeout(function(){ el.remove(); window.scrollTo(0,0); }, 380);
+  }
+  setTimeout(_addSessBadge, 420);
+}
+function _splashLogin(){
+  var u=(document.getElementById('splash-user').value||'').trim();
+  var p=(document.getElementById('splash-pass').value||'').trim();
+  var err=document.getElementById('splash-err');
+  if(!u||!p){err.textContent='Preencha usuário e senha.';return;}
+  if(u!==_SPLASH_USER||p!==_SPLASH_PASS){err.textContent='Usuário ou senha incorretos.';return;}
+  err.textContent='';
+  window.SESSION_TYPE='user';
+  try{localStorage.setItem('rs_session','user')}catch(e){}
+  _hideSplash();
+}
+function _addSessBadge(){
+  var hdr=document.getElementById('hdr');
+  if(!hdr) return;
+  var old=document.getElementById('_ubadge'); if(old) old.remove();
+  var b=document.createElement('button');
+  b.id='_ubadge';
+  b.innerHTML=SESSION_TYPE==='user'?'&#128100; Gestor':'&#128065; Convidado';
+  b.title='Clique para sair';
+  b.onclick=function(){ localStorage.removeItem('rs_session'); location.reload(); };
+  var hdrDate=document.getElementById('hdr-date');
+  if(hdrDate) hdr.insertBefore(b,hdrDate); else hdr.appendChild(b);
+  var ss=document.getElementById('sidebar-sess');
+  if(ss) ss.textContent=SESSION_TYPE==='user'?'&#128100; Logado como Gestor':'&#128065; Modo Convidado';
+  if(ss) ss.innerHTML=SESSION_TYPE==='user'?'&#128100; Logado como <strong>Gestor</strong>':'&#128065; Modo <strong>Convidado</strong>';
+}
+(function _checkSess(){
+  var s=localStorage.getItem('rs_session');
+  if(s){ SESSION_TYPE=s; _hideSplash(); }
+})();
+
+// ==================== DATA ====================
+const VAGAS = ['Vendedor','Vendedora','Recebedora/Caixa','Recebedora/Vendedora','Vendedora/Recebedora','Montador','Auxiliar de Serviços Gerais'];
+
+const PERFIS = [
+  {
+    codigo:'1.4', nome:'Vendedor(a)',
+    tem:['Boa fluência verbal','Idoneidade','Ser simpático','Boa caligrafia','Maior de 18 anos','Boa aparência','Ambicioso','Agilidade mental','2º grau completo (apresentar certificado)','Características de vendas','Dinâmico'],
+    desejavel:['Experiência anterior','Referências','Bom nível cultural','Boa redação','Radicado na cidade']
+  },
+  {
+    codigo:'1.3', nome:'Caixa / Recebedora (Horista)',
+    tem:['Idoneidade','Simpatia','Boa caligrafia','Maior de 21 anos','Boa aparência','Boa educação','Organização','Equilíbrio emocional','Fluência verbal','2º grau completo','Agilidade mental'],
+    desejavel:['Conhecimento de máquinas de calcular','Referências pessoais','Conhecimento de digitação','Noções gerais de escritório','Boa situação financeira','Horista: ter 27 anos ou mais'],
+    obs:'Todas as filiais precisam ter 01 operadora com 30 anos ou mais.'
+  },
+  {
+    codigo:'1.7', nome:'Montador',
+    tem:['Conhecimento da cidade','Maior de 21 anos','Idoneidade','Equilíbrio emocional','Boa aparência','Ser radicado na cidade','1º grau completo','Bons antecedentes','Ferramentas próprias','Experiência anterior'],
+    desejavel:['Acima de 30 anos','Moto própria']
+  },
+  {
+    codigo:'1.8', nome:'Auxiliar de Loja',
+    tem:['Equilíbrio emocional','Bom nível cultural','Dinâmico','Idoneidade','Organizado','Ser maior de 26 anos','Ser comunicativo','2º grau completo','Boa aparência','Agilidade mental','Poder de persuasão','Conhecimento de digitação','Estabilidade financeira'],
+    desejavel:['Conhecimento comercial, crédito e cobrança','Noções gerais de escritório','Estabilidade familiar','Veículo próprio','Ser habilitado','Sexo Feminino'],
+    obs:'Perfil utilizado para contratação de auxiliar administrativo.'
+  },
+  {
+    codigo:'1.5', nome:'Cobrador',
+    tem:['Conhecimento da cidade','Maior de 21 anos','Idoneidade','Equilíbrio emocional','Boa argumentação','Boa aparência','Agilidade mental','Ser radicado na cidade','2º grau completo','Ser habilitado','Estabilidade financeira','Bons antecedentes','Habilidade com cálculos','Iniciativa','Moto própria'],
+    desejavel:['Experiência anterior','Acima de 30 anos','Boa caligrafia'],
+    obs:'Datilografar no campo "observações" da Ficha de Solicitação de Emprego o n.º, categoria e validade da CNH do candidato.'
+  },
+  {
+    codigo:'1.6', nome:'Auxiliar de Limpeza',
+    tem:['Ser alfabetizada','Idoneidade','Boa saúde','Maior de 35 anos'],
+    desejavel:['Experiência anterior','Boa aparência','Referências anteriores']
+  }
+];
+
+const INITIAL_CANDIDATES = [
+  // ===== 3 ESTRELAS =====
+  {id:'c001',nome:'Pedro Calebe Dornelas Trindade',vaga:'Vendedor',telefone:'(24) 99262-5475',email:'dornelas.pedro@bol.com.br',cidade:'Volta Redonda - RJ',nascimento:null,classificacao:3,dataRecebimento:'2026-06-23',status:'em_processo',entrevistado:true,dataEntrevista:'2026-06-23',horaEntrevista:'16:30',resultadoEntrevista:'pendente',estadoCivil:null,formacao:'Bacharel em Administração — UNIP (Polo Volta Redonda)',experiencias:[{cargo:'Vendedor Comissionado',empresa:'Novo Clima Refrigeração',periodo:'2025–Atual'},{cargo:'Vendedor Comissionado',empresa:'Refrimanos Refrigeração',periodo:'2022–2025'},{cargo:'Atendimento ao Público',empresa:'Feira Livre — Volta Redonda',periodo:'2019–2022'},{cargo:'Atendente',empresa:'Lan House Israel',periodo:'2018–2019'}],parecer:'Perfil mais sólido em vendas do banco. 4 anos em vendas consultivas, formação superior, histórico de permanência razoável. Investigar expectativa salarial (veio de comissionado puro) e motivação para trocar refrigeração por móveis/eletro.',observacoes:'Pré-entrevista agendada 23/06/2026 16h30.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c002',nome:'Flávia Pereira Rodrigues da Silva',vaga:'Recebedora/Caixa',telefone:'(24) 99220-8131 / 99968-1540',email:'flaviapereirabm@hotmail.com',cidade:'Barra Mansa - RJ',nascimento:null,classificacao:3,dataRecebimento:'2026-06-23',status:'em_processo',entrevistado:true,dataEntrevista:'2026-06-25',horaEntrevista:'11:00',resultadoEntrevista:'pendente',estadoCivil:null,formacao:'Graduada em Administração — UBM (2013). Pós-graduação em Gestão de Transportes — Anhanguera (2024).',experiencias:[{cargo:'Auxiliar Administrativo / Faturamento',empresa:'Escolha Ecológica',periodo:'03/2024–Atual'},{cargo:'Operadora de Cobrança',empresa:'Transportes Generoso',periodo:'12/2023–03/2024'},{cargo:'Assistente de Suprimentos Jr.',empresa:'Plaorc Engenharia / ArcelorMittal',periodo:'09/2022–06/2023'},{cargo:'Técnico Administrativo I',empresa:'Votorantim / ArcelorMittal',periodo:'10/2013–08/2018'},{cargo:'Vendedora e Caixa',empresa:'Cia do Terno',periodo:'02/2007–08/2010'}],parecer:'Histórico técnico mais robusto do banco para recebedora — SAP, NF, cobrança, caixa. Ponto de atenção: 4 empregos em 3 anos (2021–2024). Investigar instabilidade e motivação real para o varejo.',observacoes:'Investigar instabilidade recente. Entrevista presencial 25/06/2026 11h.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c003',nome:'Cibele Gezislane Maria de Souza',vaga:'Recebedora/Caixa',telefone:'(24) 99826-1470',email:'cibellysouzza79@gmail.com',cidade:'Volta Redonda - RJ (Santa Cruz)',nascimento:'1994-01-17',classificacao:3,dataRecebimento:'2026-06-23',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio — Colégio Marista de São Vicente de Minas (2013).',experiencias:[{cargo:'Líder de Estoque',empresa:'Di Gaspi',periodo:'10/2025–Atual'},{cargo:'Operador de Máquinas Móveis',empresa:'CSN',periodo:'2023–2025'},{cargo:'Vendedora',empresa:'Sávio Homes Calçados',periodo:'2021–2022'},{cargo:'Vendedora',empresa:'Via 16 Homem',periodo:'2018–2020'},{cargo:'Balconista e Caixa',empresa:'Raquel e Francisco Lanches',periodo:'2015–2020'}],parecer:'Último emprego com lançamento em sistema, recebimento de mercadoria e liderança de equipe — diretamente aderente à função. Comunicativa e disponível. Investigar passagem pela CSN (fora do perfil).',observacoes:'Agendamento pendente.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c004',nome:'Stela Paula dos Santos',vaga:'Recebedora/Caixa',telefone:'(24) 99857-0724 / (24) 3348-5729',email:'paulastela32@gmail.com',cidade:'Barra Mansa - RJ (Açude II)',nascimento:null,classificacao:3,dataRecebimento:'2026-06-23',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo — CIEP 403. Informática Básica — Faetecc (2002).',experiencias:[{cargo:'Operadora de Caixa',empresa:'Supermercado Açude',periodo:'01/2023–07/2023'},{cargo:'Operadora de Caixa',empresa:'Floresta',periodo:'07/2019–09/2021'},{cargo:'Caixa',empresa:'Clube dos Funcionários',periodo:'03/2012–07/2019 (7 anos)'},{cargo:'Aux. de Farmácia',empresa:'M.C Gomes Saburi',periodo:'08/2012–02/2013'},{cargo:'Vendedora',empresa:'Mercado Popular da Amaral Peixoto',periodo:'06/2005–08/2008'}],parecer:'Perfil de caixa mais experiente do banco — quase 10 anos acumulados operando caixa. Ponto de atenção: gap sem emprego set/2021 a jan/2023 e sem vínculo desde jul/2023. Investigar na entrevista.',observacoes:'Agendamento pendente.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c005',nome:'Gisley de Oliveira Vianna',vaga:'Montador',telefone:'(24) 99814-9535 / 99821-5169',email:'gisleyoliveira528@gmail.com',cidade:'Barra Mansa - RJ (Nove de Abril)',nascimento:'1980-08-06',classificacao:3,dataRecebimento:'2026-06-23',status:'aprovado',entrevistado:true,dataEntrevista:'2026-06-23',horaEntrevista:'15:20',resultadoEntrevista:'aprovado',estadoCivil:'Casado',formacao:'Ensino Médio Completo. Cursos: Ponte Rolante (SENAI), Montagem Dellano, Todeschini/Italínea, Criare Móveis, SEBRAE Vendas e Qualidade Total.',experiencias:[{cargo:'Frentista',empresa:'Rede Central — Posto Piga 2000',periodo:'2023–2025'},{cargo:'Frentista',empresa:'Posto GNV Conforto',periodo:'2022'},{cargo:'Montador / Motorista / Coordenador de Montagens',empresa:'Criare Móveis Planejados',periodo:'2016'},{cargo:'Montador / Motorista',empresa:'Casa Nova Ambientes',periodo:'2014'},{cargo:'Assistente Técnico / Montador',empresa:'Italínea S.A',periodo:'2007–2010'},{cargo:'Montador / Vendedor / Motorista',empresa:'Ubá Móveis LTDA',periodo:'1998–2006 (8 anos)'}],parecer:'Melhor candidato a montador do banco. Histórico extenso em móveis planejados (Italínea, Criare, Casa Nova). CNH AB, moto própria com documentação em dia. Indicado pelo montador Keison. APROVADO na entrevista presencial.',observacoes:'Aprovado. Próxima etapa: Teste prático de montagem em loja + checagem de referências anteriores. Indicado por Keison (montador há 1 ano na empresa). Motivado, satisfeito com salário e benefícios.',indicacao:'Keison (montador)',ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  // ===== 2 ESTRELAS =====
+  {id:'c006',nome:'Aline Soares',vaga:'Recebedora/Caixa',telefone:'(24) 99334-9882',email:'alinesoare18@gmail.com',cidade:'Barra Mansa - RJ',nascimento:null,classificacao:0,dataRecebimento:'2026-06-23',status:'em_processo',entrevistado:true,dataEntrevista:'2026-06-25',horaEntrevista:'10:30',resultadoEntrevista:'pendente',estadoCivil:null,formacao:'Não informado.',experiencias:[{cargo:'Operadora de Caixa',empresa:'Barra Market Center',periodo:'05/2022–06/2024'}],parecer:'3 anos como operadora de caixa. Perfil direto para a função. Mora em Barra Mansa. Experiência limitada a operação básica de caixa, sem passagem por sistema de NF.',observacoes:'Entrevista presencial agendada 25/06/2026 10h30.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c007',nome:'Maria Clara Silva de Oliveira',vaga:'Recebedora/Caixa',telefone:'(24) 99299-3127',email:'mariakaholiveira@gmail.com',cidade:'Barra Mansa - RJ',nascimento:'2005-05-19',classificacao:2,dataRecebimento:'2026-06-23',status:'em_processo',entrevistado:true,dataEntrevista:'2026-06-25',horaEntrevista:'11:30',resultadoEntrevista:'pendente',estadoCivil:null,formacao:'Ensino Médio Completo — Colégio Comendador Pereira Ignácio. Curso de Assistente Administrativo — SENAI.',experiencias:[{cargo:'Operadora de Caixa',empresa:'Artintima Lingerie',periodo:'09/2024–04/2026'},{cargo:'Auxiliar de Loja',empresa:'Nalin',periodo:'05/2024–08/2024'},{cargo:'Auxiliar de Loja (Extra Páscoa)',empresa:'Americanas',periodo:'03/2024–04/2024'}],parecer:'21 anos, experiência direta como caixa de 1 ano e meio. Mora em Barra Mansa. Jovem mas com base sólida para a função. Investigar motivo da saída da Artintima.',observacoes:'Entrevista presencial agendada 25/06/2026 11h30.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c008',nome:'Camilla Carvalho',vaga:'Vendedora',telefone:'(24) 99961-8615',email:'Camyllacarvalho008@gmail.com',cidade:'Barra Mansa - RJ (Ano Bom)',nascimento:null,classificacao:2,dataRecebimento:'2026-06-23',status:'contato_previo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo (2024). Informática Avançada e Inglês Avançado — Oxford Protech (2025–2026).',experiencias:[{cargo:'Supervisora e Vendedora',empresa:'Extinorti',periodo:'12/2024–05/2026'}],parecer:'20 anos, inglês e informática avançados. Supervisão declarada em 1 ano e meio — pode ser título inflado. Extinorti é empresa de vendas externas, diferente do varejo físico. Potencial jovem mas contexto diferente do varejo CEM.',observacoes:'Fazer contato prévio por WhatsApp para entender o que realmente fazia antes de agendar.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  // ===== 1 ESTRELA =====
+  {id:'c009',nome:'Beatriz Fernandes Patrocínio',vaga:'Recebedora/Vendedora',telefone:'(24) 99915-8588',email:'beatrizpatrocinio51@gmail.com',cidade:'Barra Mansa - RJ (Vila Orlandelia)',nascimento:'2000-03-28',classificacao:1,dataRecebimento:'2026-06-23',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo — CEJA Professor Dary Ferreira Pinto de Oliveira (2018).',experiencias:[{cargo:'Balconista e Caixa',empresa:'Padaria Pão Bão',periodo:'09/2025–05/2026'},{cargo:'Balconista e Caixa',empresa:'Padaria do Pontal',periodo:'06/2023–02/2024'},{cargo:'Vendedora',empresa:'Rosângela Modas',periodo:'02/2022–02/2024'},{cargo:'Balconista de Padaria',empresa:'Padaria e Confeitaria do Mineiro',periodo:'04/2018–02/2019'}],parecer:'Experiência variada em balcão e caixa. Histórico fragmentado — nenhum vínculo passou de 2 anos. Estabilidade precisa ser investigada. Reserva para recebedora ou vendedora.',observacoes:'Reserva.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c010',nome:'Gabriel da Costa Mathias',vaga:'Vendedor',telefone:'(24) 99835-8739 / 99978-0902',email:'Costagabrielbm@gmail.com',cidade:'Barra Mansa - RJ (Saudade)',nascimento:null,classificacao:1,dataRecebimento:'2026-06-23',status:'contato_previo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Casado, 2 filhos',formacao:'Ensino Médio Completo — ENCEJA.',experiencias:[{cargo:'Líder de Serralheria',empresa:'Claudisofer Serralheria',periodo:'Não informado'},{cargo:'Mecânico Montador / Mecânico de Manutenção',empresa:'CBSI / CSN',periodo:'2023–2026'},{cargo:'Ajudante/Acabador',empresa:'Granitec Marmoraria',periodo:'Não informado'}],parecer:'Candidatou-se por anúncio de vendedor alegando experiência em vendas — mas currículo não comprova nenhuma experiência comercial. Fazer contato prévio para investigar antes de agendar.',observacoes:'Fazer contato por WhatsApp para verificar experiência em vendas antes de agendar.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c011',nome:'Guilherme Henrique',vaga:'Montador',telefone:'(24) 99329-9218',email:'travs699@gmail.com',cidade:'Volta Redonda - RJ (Retiro)',nascimento:'2004-10-14',classificacao:1,dataRecebimento:'2026-06-23',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio — Escola Municipal Tocantins (2017–2020).',experiencias:[{cargo:'Mecânico Montador',empresa:'CBSI / CSN',periodo:'08/2025–04/2026'},{cargo:'Mecânico de Manutenção',empresa:'CBSI / CSN',periodo:'09/2023–09/2024'}],parecer:'Experiência de montagem é industrial/mecânica, não de móveis planejados. Reserva — acionar apenas se não houver candidatos com experiência em móveis.',observacoes:'Reserva — segunda opção para montador.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c012',nome:'Mariana Florentino da Costa',vaga:'Recebedora/Vendedora',telefone:'(24) 99828-0839',email:'marianacostah48@gmail.com',cidade:'Volta Redonda - RJ',nascimento:'2002-12-04',classificacao:1,dataRecebimento:'2026-06-23',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo.',experiencias:[{cargo:'Atendente e Caixa',empresa:"McDonald\'s",periodo:'Datas inconsistentes'},{cargo:'Atendente e Caixa',empresa:'Billy The Grill',periodo:'Não informado'}],parecer:'Currículo com problemas sérios: datas inconsistentes, campos não preenchidos, resumo gerado por IA sem personalização. Experiência apenas em food service. Reserva.',observacoes:'Reserva — currículo com inconsistências. Solicitar currículo atualizado antes de qualquer contato.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c013',nome:'Gabriela Judith Araújo Silva',vaga:'Recebedora/Caixa',telefone:'(24) 99912-5311 / 99877-1007',email:'gabrielajudit12@gmail.com',cidade:'Volta Redonda - RJ',nascimento:'2001-05-19',classificacao:1,dataRecebimento:'2026-06-23',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Não informado.',experiencias:[{cargo:'Operadora de Caixa',empresa:'Não informado',periodo:'Datas não informadas'},{cargo:'Balconista',empresa:'Não informado',periodo:'Datas não informadas'},{cargo:'Manicure',empresa:'Não informado',periodo:'Datas não informadas'}],parecer:'Tem experiência de caixa declarada mas nenhuma empresa ou data informada no currículo — impossível avaliar estabilidade. Reserva para caixa.',observacoes:'Reserva — currículo incompleto. Solicitar currículo completo com empresas e datas.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c014',nome:'Camila Pedro Lopes Gonçalves',vaga:'Recebedora/Caixa',telefone:'(24) 99929-4042',email:'camilapedro196@gmail.com',cidade:'Volta Redonda - RJ (Retiro)',nascimento:null,classificacao:1,dataRecebimento:'2026-06-23',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo. Curso de Atendente de Farmácia.',experiencias:[{cargo:'Operadora de Caixa',empresa:'Drogarias Economize',periodo:'Datas não informadas'},{cargo:'Operadora de Caixa',empresa:'Supermercado Bramil',periodo:'Datas não informadas'},{cargo:'Operadora de Caixa',empresa:'Supermercado Sensor',periodo:'Datas não informadas'},{cargo:'Op. de Loja',empresa:'Drogarias Moderna',periodo:'Datas não informadas'},{cargo:'Balconista de Frios',empresa:'Supermercado Maravilha',periodo:'Datas não informadas'}],parecer:'Cinco empregos sem nenhuma data — impossível avaliar estabilidade. Experiência de caixa existe mas não é verificável. Reserva.',observacoes:'Reserva — sem datas nos vínculos. Solicitar currículo completo.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  // ===== FORA DO PERFIL =====
+  {id:'c015',nome:'Giulia Vitória Silva',vaga:'Vendedora',telefone:'(24) 99934-7339',email:'sgiuliavitoria3@gmail.com',cidade:'Volta Redonda - RJ',nascimento:null,classificacao:0,dataRecebimento:'2026-06-23',status:'reprovado',entrevistado:true,dataEntrevista:'2026-06-23',horaEntrevista:'11:00',resultadoEntrevista:'reprovado',estadoCivil:null,formacao:'Curso de Eletricista Industrial (2022–2023).',experiencias:[{cargo:'Operadora Comercial',empresa:'HAVAN',periodo:'06/2024–05/2026'},{cargo:'Consultora de Vendas',empresa:'VIP Móveis',periodo:'07/2023–04/2024'}],parecer:'Pré-entrevista virtual 23/06/2026. Experiência em vendas não consistente — na HAVAN atuou como caixa. VIP Móveis: 10 meses sem resultados expressivos. Aparência inadequada. Histórico pessoal instável.',observacoes:'REPROVADA. Competências 3/5, Características 2/5. Motivos: experiência superficial, aparência inadequada, histórico pessoal instável.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c016',nome:'Jefferson Wilson de Souza Monteiro',vaga:null,telefone:'(24) 99933-2241 / 99946-2115',email:'Jefferson130386@gmail.com',cidade:'Volta Redonda - RJ',nascimento:null,classificacao:0,dataRecebimento:'2026-06-23',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Casado',formacao:'Ensino Médio Completo.',experiencias:[{cargo:'Gerente / Balconista',empresa:'Drogarias Povão / Alfa / Pedrinho',periodo:'2008–2026'}],parecer:'Toda trajetória em drogarias (18 anos, 8 empregos). Objetivo declarado "entrar no mercado de trabalho" não condiz com experiência. Sem aderência às vagas abertas.',observacoes:'Descartado por falta de aderência.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c017',nome:'Raphaela Nascimento Guimarães',vaga:null,telefone:'(24) 99837-6291',email:'raphinha.nascimento1123@gmail.com',cidade:'Volta Redonda - RJ',nascimento:'1986-01-11',classificacao:0,dataRecebimento:'2026-06-23',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio — ICT (2016).',experiencias:[{cargo:'Op. de Caixa / Balconista',empresa:'Padaria Bracui',periodo:'11/2022–10/2023'},{cargo:'ASB',empresa:'Sorria Rio / Clínica Amor e Saúde',periodo:'2023–2025'}],parecer:'Histórico muito disperso: caixa de padaria, auxiliar cirúrgica, vendedora de ótica. Sem foco profissional. Instabilidade elevada.',observacoes:'Descartado por dispersão e instabilidade.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c018',nome:'Gilyard de Souza Marques',vaga:'Vendedor',telefone:'(24) 99995-4595',email:'gilyard.souza.br@gmail.com',cidade:'Barra Mansa - RJ',nascimento:'2002-09-20',classificacao:0,dataRecebimento:'2026-06-23',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteiro',formacao:'Ensino Médio — Paulo Freire.',experiencias:[{cargo:'Controlador de Acesso',empresa:'Grupo Vila Forte / Unimed',periodo:'04/2024–Atual'},{cargo:'Operador de Loja',empresa:'Spoleto',periodo:'2020–2021'}],parecer:'Sem experiência comercial comprovada. Emprego atual em segurança/portaria. Não aderente à vaga de vendedor.',observacoes:'Descartado — sem experiência comercial.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c019',nome:'Marcela Adriana Martins',vaga:'Vendedora',telefone:'(24) 99224-2980',email:'marcelasophia814422@gmail.com',cidade:'Barra Mansa - RJ',nascimento:null,classificacao:0,dataRecebimento:'2026-06-23',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Fundamental — Incompleto.',experiencias:[{cargo:'Vendedora',empresa:'Oi Telefonia',periodo:'2020'},{cargo:'Ajudante Refratário / Pedreiro Refratário',empresa:'CBSI',periodo:'2,5 anos'}],parecer:'Eliminatório: Ensino Fundamental incompleto. Perfil da vaga exige 2º grau completo com certificado.',observacoes:'Descartado — escolaridade eliminatória.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c020',nome:'Natieli Martins',vaga:'Vendedora',telefone:'(24) 98835-2816',email:'natielimartins77@gmail.com',cidade:'Barra Mansa - RJ (Boa Sorte)',nascimento:null,classificacao:0,dataRecebimento:'2026-06-23',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo (2020).',experiencias:[{cargo:'Vendedora Externa',empresa:'Ibrlink Internet',periodo:'3 meses'},{cargo:'Atendente de Loja',empresa:'Supermercado Pérola',periodo:'2 meses'}],parecer:'Extrema instabilidade — todos os vínculos com menos de 3 meses. Sem base para avaliar aderência comercial.',observacoes:'Descartado — instabilidade extrema.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c021',nome:'Letícia Nostório Fernandes',vaga:null,telefone:'(24) 99954-4129',email:'leticianostorio073@gmail.com',cidade:'Barra Mansa - RJ',nascimento:null,classificacao:0,dataRecebimento:'2026-06-23',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Superior cursando.',experiencias:[{cargo:'Telefonista',empresa:'Fórum Comarca de Barra Mansa',periodo:'05/2026–05/2026'},{cargo:'Recepcionista',empresa:'FisioCentro',periodo:'08/2025–02/2026'}],parecer:'Objetivo declarado: Terapia Ocupacional. Perfil administrativo/saúde sem aderência às vagas abertas.',observacoes:'Descartado — objetivo profissional incompatível.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+
+  {id:'c022',nome:'Luiza Helena da Silva',vaga:null,telefone:'(24) 3328-0026 / 99309-668',email:'luizahelenasouzadasilvs@gmail.com',cidade:'Barra Mansa - RJ',nascimento:'1994-04-05',classificacao:0,dataRecebimento:'2026-06-23',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Casada',formacao:'Ensino Médio — Colégio Estadual Comendador Pereira Ignacio (2013).',experiencias:[{cargo:'Atendente',empresa:'ALYA Foods LTDA',periodo:'05/2011–10/2011'}],parecer:'Única experiência data de 2011 — 15 anos sem vínculo documentado. Sem base para avaliação.',observacoes:'Descartado — sem vínculo desde 2011.',indicacao:null,ultimaAtualizacao:'2026-06-23',ultimoContato:null,notaFinal:null},
+  {id:'c023',nome:'Fabíola Lessa de Oliveira Alves',vaga:'Recebedora/Vendedora',telefone:'(24) 99940-2689 / (24) 99976-7024',email:'fabilessa45@gmail.com',cidade:'Barra Mansa - RJ (Getúlio Vargas)',nascimento:null,classificacao:3,dataRecebimento:'2026-06-24',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo.',experiencias:[{cargo:'Atendente / Operadora de Caixa',empresa:'Lojas Nalin',periodo:'03/2020–01/2026'}],parecer:'5 anos e 2 meses na Lojas Nalin (03/2020–01/2026) como atendente com operação de caixa — maior estabilidade do banco. Experiência diretamente em varejo de loja. Perfil sólido para recebedora ou vendedora.',observacoes:'Agendar com prioridade. Estabilidade excepcional — 5 anos no mesmo emprego em varejo.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c024',nome:'Eloá de Souza da Silva',vaga:'Recebedora/Caixa',telefone:'(24) 99294-1156',email:'eloaia90@gmail.com',cidade:'Barra Mansa - RJ',nascimento:null,classificacao:2,dataRecebimento:'2026-06-24',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo — Cemec. Cursos Fundação Bradesco (2025): Excel, Recepcionista, Administração.',experiencias:[{cargo:'Operadora de Caixa',empresa:'Farmácia',periodo:'2025–2026'},{cargo:'Auxiliar de Logística',empresa:'CBSI',periodo:'Período anterior'}],parecer:'Operadora de caixa em farmácia (2025–2026) + auxiliar de logística CBSI com emissão de NF e controle de estoque. PDV declarado. Histórico curto mas dupla experiência aderente à função.',observacoes:'Agendar. Dupla experiência aderente — caixa + NF/estoque.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c025',nome:'Kauã Aurélio das Graças Vidal',vaga:'Vendedor',telefone:'(12) 99141-1020',email:'kauaatleta6@gmail.com',cidade:'Barra Mansa - RJ (9 de Abril)',nascimento:null,classificacao:1,dataRecebimento:'2026-06-24',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Administração — cursando.',experiencias:[{cargo:'Auxiliar Administrativo',empresa:'Exército Brasileiro',periodo:'10 meses'},{cargo:'Atendente',empresa:'Petshop',periodo:'3 meses'}],parecer:'Perfil voltado para marketing digital e redes sociais. Experiências curtas: petshop (3 meses) e auxiliar adm no Exército (10 meses). Sem experiência em varejo físico ou vendas consultivas.',observacoes:'Reserva. Pode ser acionado para eventual vaga administrativa ou de apoio futuro.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c026',nome:'Renata Alves Moura',vaga:'Recebedora/Vendedora',telefone:'(24) 99217-8354 / (24) 99977-8519',email:'re.alves96@icloud.com',cidade:'Barra Mansa - RJ (Nova Esperança)',nascimento:'1996-05-08',classificacao:1,dataRecebimento:'2026-06-24',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo. Cursos SEBRAE: Técnicas de Vendas e Atendimento (2021). Curso de Recepcionista — FAJON (2022).',experiencias:[{cargo:'Atendente',empresa:'Telemarketing',periodo:'4 meses'},{cargo:'Auxiliar de Produção',empresa:'Empresa',periodo:'1 ano'},{cargo:'Jovem Aprendiz',empresa:'Correios',periodo:'1 ano'}],parecer:'Experiência fragmentada: telemarketing (4 meses), auxiliar de produção (1 ano), jovem aprendiz nos Correios (1 ano). Cursos de vendas pelo SEBRAE. Sem experiência sólida em varejo ou caixa.',observacoes:'Reserva.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c027',nome:'Caroline Matias Leal',vaga:null,telefone:'(24) 99998-9718',email:'carolinematiasleal96@gmail.com',cidade:'Barra Mansa - RJ (Rialto)',nascimento:'1997-12-19',classificacao:0,dataRecebimento:'2026-06-24',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo — CIEP 486. Cursos Microlins: Operador de Caixa, Assistente Adm, Auxiliar Odontológico, RH.',experiencias:[{cargo:'Atendente de Padaria',empresa:'Padaria',periodo:'Não informado'},{cargo:'Auxiliar de Produção',empresa:'Indústria',periodo:'Não informado'}],parecer:'Experiência apenas como atendente de padaria e auxiliar de produção. Sem datas nos vínculos. Cursos teóricos sem experiência prática comprovada. Sem aderência às vagas abertas.',observacoes:'Descartada — sem experiência aderente às vagas abertas.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c028',nome:'Alexandre Tavares da Cunha',vaga:'Vendedor',telefone:'(21) 92008-4354',email:'ale.tav13@gmail.com',cidade:'Volta Redonda - RJ (Açude)',nascimento:'1984-11-13',classificacao:3,dataRecebimento:'2026-06-24',status:'em_processo',entrevistado:false,dataEntrevista:'2026-06-25',horaEntrevista:'16:30',resultadoEntrevista:null,estadoCivil:'Casado',formacao:'Ensino Médio Completo. Licenciatura em Geografia — Cederj (cursando). CNH válida até 2033.',experiencias:[{cargo:'Promotor de Vendas Pleno',empresa:'EPSON / SONY / TEC TOY',periodo:'11,5 anos'},{cargo:'Vendedor Direto',empresa:'Empresa',periodo:'2 anos'}],parecer:'11 anos e meio como Promotor de Vendas Pleno (EPSON, SONY, TEC TOY) + 2 anos como vendedor direto. Quase 14 anos em funções comerciais. Comunicação, demonstração, fechamento de venda, treinamento de equipe. Ponto de atenção: experiência em promotoria — diferente do varejo de loja. Investigar adaptação ao varejo presencial com meta diária.',observacoes:'Agendar. Maior histórico comercial do banco. Verificar adaptação ao modelo de varejo físico. Entrevista presencial para 25/06 às 16:30h.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c029',nome:'Henrique Eduardo Rosa',vaga:'Vendedor',telefone:'(65) 99617-4664',email:'henriqueeduardo.empresarial@gmail.com',cidade:'Volta Redonda - RJ (Santa Cruz)',nascimento:null,classificacao:2,dataRecebimento:'2026-06-24',status:'contato_previo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio + Técnico em Administração de Negócios. Cursos: SENAC (Assistente Adm 160h), SENAI (Excel 80h), SEBRAE, Fundação Bradesco, PUCPR. Inglês intermediário.',experiencias:[{cargo:'Promotor de Trade Marketing',empresa:'HAVAN',periodo:'Sem datas'},{cargo:'Embaixador de Loja',empresa:"McDonald\'s",periodo:'Sem datas'},{cargo:'Auxiliar Adm / Almoxarifado',empresa:'Empresa',periodo:'Sem datas'}],parecer:'Promotor de Trade Marketing na HAVAN, embaixador de loja McDonald\'s e auxiliar adm em almoxarifado. Cursos sólidos. Sem datas em nenhuma experiência — impossível avaliar estabilidade. Toda trajetória no Paraná — verificar situação atual em Volta Redonda.',observacoes:'Contato prévio — confirmar datas dos vínculos, tempo em VR e disponibilidade antes de agendar.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c030',nome:'Aline Procopio Martins',vaga:'Vendedora',telefone:'(24) 99853-1502 / (24) 99945-9997',email:'procopioaline4@gmail.com',cidade:'Volta Redonda - RJ (Retiro)',nascimento:'2003-02-22',classificacao:1,dataRecebimento:'2026-06-24',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo. Superior em Direito — cursando. Computação Básica.',experiencias:[{cargo:'Atendente / Reposição',empresa:'Americanas',periodo:'Sem datas'},{cargo:'Atendente',empresa:"McDonald\'s",periodo:'Sem datas'},{cargo:'Atendente / Vendedora',empresa:'Vi Moda Evangélica',periodo:'Sem datas'}],parecer:'Experiência em Americanas, McDonald\'s, Vi Moda Evangélica. Sem datas em nenhum vínculo. Perfil jovem com atendimento ao cliente mas sem experiência comercial consistente em varejo de ticket médio. Histórico disperso.',observacoes:'Reserva — pode ser considerada para Vendedora Portátil se necessário.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c031',nome:'Letícia Torres Corrêa',vaga:'Vendedora',telefone:'(24) 99935-3078',email:null,cidade:'Barra Mansa - RJ',nascimento:null,classificacao:0,dataRecebimento:'2026-06-24',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Fundamental Completo. Curso de Auxiliar Veterinária.',experiencias:[],parecer:'ELIMINATÓRIO: apenas ensino fundamental completo. Perfil de vendedor CEM exige 2º grau completo com apresentação de certificado. Descartada independentemente do histórico comercial.',observacoes:'Descartada — critério eliminatório de escolaridade.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c032',nome:'Yasmin Alves Augusto',vaga:'Recebedora/Caixa',telefone:'(24) 98809-4207',email:'yasminalves504@gmail.com',cidade:'Não especificada — DDD 24',nascimento:null,classificacao:0,dataRecebimento:'2026-06-24',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio cursando. Excel Avançado. Curso de Montagem e Manutenção de Micro.',experiencias:[],parecer:'ELIMINATÓRIO: ensino médio incompleto (cursando). Perfil de recebedora CEM exige ensino médio completo. Descartada.',observacoes:'Descartada — critério eliminatório de escolaridade.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c033',nome:'Lívia Izabelle dos Santos Gomes',vaga:null,telefone:'(24) 99266-5066',email:'liviaizabelle81@gmail.com',cidade:'Barra Mansa - RJ (Floriano)',nascimento:null,classificacao:0,dataRecebimento:'2026-06-24',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo. Técnica em Enfermagem — SENAC RJ (2024). Inglês intermediário. Informática avançada. CNH B.',experiencias:[{cargo:'Técnica em Enfermagem / Auxiliar',empresa:'Área da Saúde',periodo:'Período atual'},{cargo:'Costureira Automotiva',empresa:'Indústria',periodo:'Período anterior'}],parecer:'Toda trajetória na área da saúde e indústria: técnica em enfermagem, costureira automotiva, auxiliar de escritório. Sem aderência às vagas abertas.',observacoes:'Descartada — perfil saúde/indústria sem aderência às vagas.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c034',nome:'Amanda Pereira Carneiro',vaga:null,telefone:'(24) 99838-3730',email:'amandaleandro1903@gmail.com',cidade:'Volta Redonda - RJ',nascimento:null,classificacao:0,dataRecebimento:'2026-06-24',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo — CIEP 299 Julio Caruso (2019).',experiencias:[{cargo:'Atendente',empresa:'Alimentação',periodo:'1 mês'},{cargo:'Auxiliar de Cozinha',empresa:'Alimentação',periodo:'1 mês e meio'}],parecer:'Experiência apenas em alimentação — atendente (1 mês) e auxiliar de cozinha (1 mês e meio). Sem aderência às vagas abertas.',observacoes:'Descartada — sem experiência aderente às vagas.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c035',nome:'Maria Heloisa Leal',vaga:'Recebedora/Caixa',telefone:'(24) 98812-4007 / (24) 99824-6505',email:'mariaaheloisaa121@gmail.com',cidade:'Volta Redonda - RJ (Retiro)',nascimento:null,classificacao:1,dataRecebimento:'2026-06-24',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo.',experiencias:[{cargo:'Empacotadora / OP Caixa iFood',empresa:'Empório Royale',periodo:'1 ano e 7 meses'}],parecer:'Ensino médio completo confirmado. Experiência no Empório Royale: empacotadora (1 ano) e OP Caixa iFood (7 meses) — sem carteira assinada. Experiência de caixa existe mas em food service. Histórico curto e sem varejo tradicional.',observacoes:'Reclassificada — reserva para recebedora.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c036',nome:'Lorrana dos Santos Moreira',vaga:'Vendedora/Recebedora',telefone:'(24) 99829-2357',email:'lorranamoreira817@gmail.com',cidade:'Rio de Janeiro - RJ (Vista Alegre)',nascimento:'2004-04-27',classificacao:2,dataRecebimento:'2026-06-24',status:'contato_previo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo — CIEP 295 (2024). Técnico de Enfermagem — Cruz Vermelha (cursando até 2027).',experiencias:[{cargo:'Operadora de Caixa / Atendente',empresa:'Coffe Break Cafeteria',periodo:'05/2025–01/2026'},{cargo:'Vendas PAP',empresa:'Oi Fibra',periodo:'02/2022–10/2023'},{cargo:'Vendas PAP',empresa:'Sky Fibra',periodo:'05/2023–11/2023'}],parecer:'Operadora de caixa e atendente na Coffe Break Cafeteria (05/2025–01/2026). Vendas PAP na Oi (02/2022–10/2023) e Sky Fibra (05/2023–11/2023). Auxiliar adm com controle de estoque em planilhas. Datas consistentes. Ponto crítico: mora em Rio de Janeiro — verificar disponibilidade para Barra Mansa.',observacoes:'Contato prévio — confirmar localização e disponibilidade antes de agendar.',indicacao:null,ultimaAtualizacao:'2026-06-24',ultimoContato:null,notaFinal:null},
+  {id:'c037',nome:'Iúle Emanuele Rodrigues Costa',vaga:'Recebedora/Caixa',telefone:'(24) 99838-0384 / (24) 97404-2963',email:'iulerodrigues24@gmail.com',cidade:'Barra Mansa - RJ (Santa Rita de Cássia)',nascimento:null,classificacao:3,dataRecebimento:'2026-06-25',status:'em_processo',entrevistado:false,dataEntrevista:'2026-06-26',horaEntrevista:'10:30',resultadoEntrevista:null,estadoCivil:null,formacao:'Graduação em Gestão de RH — FASF (2022–2023). Técnica em Segurança do Trabalho — ICT (2012). Curso Libras Básico (2024). Informática Administrativa — Oxford (2025–2027).',experiencias:[],parecer:'Agendar com prioridade — perfil técnico excelente para recebedora.',observacoes:'',indicacao:null,ultimaAtualizacao:'2026-06-25',ultimoContato:null,notaFinal:null},
+  {id:'c038',nome:'Giuliana Brenda Souza de Oliveira',vaga:null,telefone:'(24) 99278-4299',email:'dhiefersonneto21@gmail.com',cidade:'Volta Redonda - RJ (Água Limpa)',nascimento:'2002-02-03',classificacao:0,dataRecebimento:'2026-06-25',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio — Paulo Freire (2023–2025).',experiencias:[],parecer:'Descartada — sem aderência às vagas abertas.',observacoes:'',indicacao:null,ultimaAtualizacao:'2026-06-25',ultimoContato:null,notaFinal:null},
+  {id:'c039',nome:'Erikson Henrique da Costa Almeida',vaga:'Vendedor',telefone:'(24) 99854-8032',email:null,cidade:'Barra Mansa - RJ (Vila Nova)',nascimento:null,classificacao:0,dataRecebimento:'2026-06-25',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo. Cursando Enfermagem. Cursos: Atendente de Farmácia, Auxiliar Médico, Técnicas de Recepção, Atendente de Consultório Odontológico, Injetáveis.',experiencias:[],parecer:'Sem perfil — histórico autônomo sem comprovação formal. Área da saúde.',observacoes:'',indicacao:null,ultimaAtualizacao:'2026-06-25',ultimoContato:null,notaFinal:null},
+  {id:'c040',nome:'Isadora da Silva',vaga:null,telefone:'(24) 99277-4925',email:null,cidade:'Barra Mansa - RJ',nascimento:null,classificacao:0,dataRecebimento:'2026-06-25',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo. Informática completo. Inglês avançado.',experiencias:[],parecer:'Descartada — experiência apenas em alimentação.',observacoes:'',indicacao:null,ultimaAtualizacao:'2026-06-25',ultimoContato:null,notaFinal:null},
+  {id:'c041',nome:'Gilda Mara da Silva Cândido',vaga:'Recebedora/Caixa',telefone:'(24) 98128-7781 / (24) 98150-1353',email:'candidosilva84@outlook.com',cidade:'Barra Mansa - RJ',nascimento:null,classificacao:2,dataRecebimento:'2026-06-25',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Tecnólogo em RH — FASF (previsão 2025). Técnico em Eletromecânica — concluído 2022. Cursando Engenharia Civil — UC (previsão 2030).',experiencias:[],parecer:'Perfil administrativo sólido com experiência de fechamento de caixa e conferência de valores. Ponto de atenção: 3 empregos em menos de 1 ano (2025–2026) — investigar instabilidade na entrevista.',observacoes:'Agendar — investigar instabilidade recente antes de avançar.',indicacao:null,ultimaAtualizacao:'2026-06-25',ultimoContato:null,notaFinal:null},
+  {id:'c042',nome:'Bruna Santiago Vieira Pereira',vaga:'Vendedora',telefone:'(24) 98131-3176 / (24) 98132-0358',email:'bs249681@gmail.com',cidade:'Barra Mansa - RJ (Cantagalo)',nascimento:null,classificacao:2,dataRecebimento:'2026-06-25',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo — Escola Municipal Comendador Pereira Ignácio (2018). Microsoft Office e Excel Avançado (2013).',experiencias:[],parecer:'Experiência em vendas B2B com prospecção, CRM e metas. Ponto de atenção: vendas externas diferem do varejo físico. Sem datas nos vínculos.',observacoes:'Contato prévio — confirmar datas dos vínculos e interesse para varejo físico.',indicacao:null,ultimaAtualizacao:'2026-06-25',ultimoContato:null,notaFinal:null},
+  {id:'c043',nome:'Gisele Aparecida dos Santos',vaga:'Recebedora/Caixa',telefone:'(24) 98157-5089',email:'gigi.99902@gmail.com',cidade:'Barra Mansa - RJ',nascimento:null,classificacao:2,dataRecebimento:'2026-06-25',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo. CNH Categoria B.',experiencias:[],parecer:'Experiência direta em caixa em múltiplos estabelecimentos (farmácia, supermercados). Sem datas — investigar estabilidade.',observacoes:'Agendar — investigar datas e estabilidade na entrevista.',indicacao:null,ultimaAtualizacao:'2026-06-25',ultimoContato:null,notaFinal:null},
+  {id:'c044',nome:'Sarah Machado Novaes Guedes',vaga:'Vendedora',telefone:'(24) 98135-0262',email:'saranovaes97@gmail.com',cidade:'Barra Mansa - RJ',nascimento:null,classificacao:3,dataRecebimento:'2026-06-25',status:'em_processo',entrevistado:false,dataEntrevista:'2026-06-30',horaEntrevista:'11:30',resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo.',experiencias:[],parecer:'3 anos como vendedora em concessionária de veículos. 4 anos no Bob\'s com caixa e estoque — estabilidade excelente. Perfil sólido para vendedora.',observacoes:'Agendar com prioridade — perfil de vendas consultivas com estabilidade.',indicacao:null,ultimaAtualizacao:'2026-06-25',ultimoContato:null,notaFinal:null},
+  {id:'c045',nome:'Rafael Lisboa De Matos',vaga:'Vendedor',telefone:'(24) 99266-8223 / (21) 97948-3358',email:'rafaelmatoslisboa@gmail.com',cidade:'Volta Redonda - RJ (Jardim Vila Rica)',nascimento:null,classificacao:3,dataRecebimento:'2026-06-26',status:'em_processo',entrevistado:false,dataEntrevista:'2026-06-30',horaEntrevista:'16:00',resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo.',experiencias:[],parecer:'Experiência diretamente no segmento da CEM — eletrodomésticos, eletrônicos e móveis (Tele Rio, Casas Bahia, Castor Móveis). Perfil exato para a vaga.',observacoes:'Agendar com prioridade — segmento idêntico ao da CEM.',indicacao:null,ultimaAtualizacao:'2026-06-26',ultimoContato:null,notaFinal:null},
+  {id:'c046',nome:'Ana Clara Soares Diniz',vaga:'Recebedora/Caixa',telefone:'(24) 99920-1521',email:null,cidade:'Barra Mansa - RJ (Vila Principal)',nascimento:'2007-03-26',classificacao:2,dataRecebimento:'2026-06-26',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo — CIEP 493 (2023–2025).',experiencias:[],parecer:'19 anos, Barra Mansa. Experiência real de caixa. Perfil jovem com potencial.',observacoes:'Agendar.',indicacao:null,ultimaAtualizacao:'2026-06-26',ultimoContato:null,notaFinal:null},
+  {id:'c047',nome:'Julia Claudia De Oliveira Souza',vaga:'Vendedora',telefone:'(24) 98137-8324',email:'juliaoliveira3005s@gmail.com',cidade:'Volta Redonda - RJ (Vila Brasília)',nascimento:'2003-05-30',classificacao:2,dataRecebimento:'2026-06-26',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo — Colégio Estadual Brasília.',experiencias:[],parecer:'Experiência em vendas existe mas vínculos muito curtos — instabilidade elevada.',observacoes:'Contato prévio — investigar instabilidade antes de agendar.',indicacao:null,ultimaAtualizacao:'2026-06-26',ultimoContato:null,notaFinal:null},
+  {id:'c048',nome:'Deysiane Alvarenga dos Santos Mattos',vaga:null,telefone:'(24) 99873-8426',email:null,cidade:'Volta Redonda - RJ (Siderlândia)',nascimento:'2000-07-25',classificacao:0,dataRecebimento:'2026-06-26',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo.',experiencias:[],parecer:'Única experiência em food service. Sem aderência às vagas abertas.',observacoes:'Descartada — sem experiência aderente.',indicacao:null,ultimaAtualizacao:'2026-06-26',ultimoContato:null,notaFinal:null},
+  {id:'c049',nome:'Juliana Pereira Pires',vaga:'Vendedora/Recebedora',telefone:'(24) 99296-2161',email:null,cidade:'Barra Mansa - RJ (São Pedro)',nascimento:'1992-04-21',classificacao:2,dataRecebimento:'2026-06-26',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino Médio Completo. Inglês Básico e Avançado — Wizard (cursando).',experiencias:[],parecer:'Experiência em vendas e caixa (Art Prima, Celeste). Sem datas — investigar estabilidade.',observacoes:'Agendar — investigar cronologia e estabilidade na entrevista.',indicacao:null,ultimaAtualizacao:'2026-06-26',ultimoContato:null,notaFinal:null},
+  {id:'c050',nome:'Mirian Rodrigues Martins Medeiros',vaga:null,telefone:'(24) 99995-0011 / (24) 99257-4287',email:'Mirianthayana@gmail.com',cidade:'Barra Mansa - RJ (KM4)',nascimento:null,classificacao:0,dataRecebimento:'2026-06-26',status:'descartado',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Solteira',formacao:'Ensino médio incompleto — cursando.',experiencias:[],parecer:'ELIMINATÓRIO: ensino médio incompleto.',observacoes:'Fora do perfil — escolaridade eliminatória.',indicacao:null,ultimaAtualizacao:'2026-06-26',ultimoContato:null,notaFinal:null},
+  {id:'c051',nome:'Danyany Galvão Araujo',vaga:'Vendedora',telefone:'(24) 99243-5373',email:'Danyanygalvao40@gmail.com',cidade:'Piteiras - RJ',nascimento:null,classificacao:1,dataRecebimento:'2026-06-27',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:null,formacao:'Ensino Médio Completo.',experiencias:[],parecer:'Experiência em vendas no varejo (Pernambucanas) e como autônoma. Sem datas. Reserva para vendedora.',observacoes:'Reserva — investigar datas e estabilidade.',indicacao:null,ultimaAtualizacao:'2026-06-27',ultimoContato:null,notaFinal:null},
+  {id:'c052',nome:'Karen Luiza de Paula',vaga:'Vendedora/Recebedora',telefone:'(24) 99844-4809 / (24) 99962-3901',email:'karenluiza1203@gmail.com',cidade:'Volta Redonda - RJ (Santa Cruz)',nascimento:'2005-10-29',classificacao:1,dataRecebimento:'2026-06-27',status:'reserva',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Casada',formacao:'Ensino Médio Completo — CIEP 293 Walmir de Freitas.',experiencias:[],parecer:'20 anos, casada, Volta Redonda. 3 anos e 1 mês na Drogarias Povão. Boa estabilidade. Reserva para vendedora ou recebedora.',observacoes:'Reserva — investigar motivo da saída e interesse na função.',indicacao:null,ultimaAtualizacao:'2026-06-27',ultimoContato:null,notaFinal:null},
+  {id:'c053',nome:'Monica Gisele Barreto de Paula Silva',vaga:'Vendedora/Recebedora',telefone:'(24) 99862-6066 / (24) 99908-9434',email:null,cidade:'Barra Mansa - RJ (São Luiz)',nascimento:'1978-09-15',classificacao:2,dataRecebimento:'2026-06-28',status:'em_processo',entrevistado:false,dataEntrevista:null,horaEntrevista:null,resultadoEntrevista:null,estadoCivil:'Casada',formacao:'Ensino Médio Completo. Informática Básica.',experiencias:[],parecer:'47 anos, casada, Barra Mansa. Histórico amplo em varejo: Americanas, Celeste, calçados, materiais de construção. Sem datas — investigar estabilidade.',observacoes:'Agendar — investigar cronologia e estabilidade na entrevista.',indicacao:null,ultimaAtualizacao:'2026-06-28',ultimoContato:null,notaFinal:null}
+];
+
+// ==================== STATE ====================
+let candidates = [];
+let editingId = null;
+
+const API_URL = 'https://script.google.com/macros/s/AKfycbwSAB0xBLBibGBBnsouq8kDqpoF8xVZ45xBYizdsFZSSSCH2z3plksnmmlIHDnTc-SV/exec';
+
+function fetchJSONP(url){
+  return new Promise((resolve, reject)=>{
+    const cb = 'rs_cb_' + Date.now();
+    let script;
+    window[cb] = (data)=>{
+      delete window[cb];
+      if(script && script.parentNode) script.parentNode.removeChild(script);
+      resolve(data);
+    };
+    script = document.createElement('script');
+    script.src = url + '?callback=' + cb + '&t=' + Date.now();
+    script.onerror = ()=>{ delete window[cb]; reject(new Error('JSONP error')); };
+    document.head.appendChild(script);
+    setTimeout(()=>{ if(window[cb]){ delete window[cb]; reject(new Error('timeout')); } }, 12000);
+  });
+}
+
+async function loadData(){
+  try {
+    const data = await fetchJSONP(API_URL);
+    // Suporta formato novo {candidates, perfis} e formato antigo (array)
+    let cands, prfs;
+    if(data && !Array.isArray(data) && data.candidates){
+      cands = data.candidates;
+      prfs  = data.perfis;
+    } else if(Array.isArray(data)){
+      cands = data;
+      prfs  = null;
+    }
+    const validCands = cands && cands.length > 0 && cands[0] && cands[0].nome;
+    if(validCands){
+      candidates = cands;
+      // Merge: adiciona candidatos novos do INITIAL_CANDIDATES que não existem na nuvem
+      const cloudIds = new Set(candidates.map(c=>c.id));
+      const novos = INITIAL_CANDIDATES.filter(c=>!cloudIds.has(c.id));
+      if(novos.length > 0){
+        candidates = candidates.concat(novos.map(c=>({...c})));
+        syncToCloud(); // persiste os novos na nuvem automaticamente
+        toast(`${novos.length} novo(s) candidato(s) adicionado(s) ao banco.`,'ok');
+      }
+      localStorage.setItem('rs_candidates', JSON.stringify(candidates));
+      if(prfs && prfs.length > 0){
+        perfis = prfs;
+        localStorage.setItem('rs_perfis', JSON.stringify(perfis));
+      }
+    } else {
+      // Nuvem vazia — carrega banco inicial e sincroniza
+      candidates = INITIAL_CANDIDATES.map(c=>({...c}));
+      localStorage.removeItem('rs_candidates');
+      syncToCloud();
+    }
+  } catch(err){
+    candidates = INITIAL_CANDIDATES.map(c=>({...c}));
+    toast('⚠️ Sem conexão com o servidor — dados padrão carregados','err');
+  }
+  // overlay escondido pelo initApp, após renderDashboard()
+}
+
+function saveData(){
+  localStorage.setItem('rs_candidates', JSON.stringify(candidates));
+  localStorage.setItem('rs_last_save', new Date().toLocaleString('pt-BR'));
+  syncToCloud();
+}
+
+async function syncToCloud(){
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({candidates, perfis})
+    });
+  } catch(err){ console.warn('Sync falhou:', err); }
+}
+function genId(){ return 'c'+Date.now()+Math.random().toString(36).slice(2,6); }
+
+// ==================== HELPERS ====================
+function starBadge(n){
+  if(n===3) return '<span class="badge badge-3">⭐⭐⭐ 3 Estrelas</span>';
+  if(n===2) return '<span class="badge badge-2">⭐⭐ 2 Estrelas</span>';
+  if(n===1) return '<span class="badge badge-1">⭐ 1 Estrela</span>';
+  return '<span class="badge badge-fp">Fora do Perfil</span>';
+}
+function resultBadge(r){
+  if(r==='aprovado')   return '<span class="badge badge-green">✓ Aprovado</span>';
+  if(r==='reprovado')  return '<span class="badge badge-red">✗ Reprovado</span>';
+  if(r==='pendente')   return '<span class="badge badge-orange">⏳ Pendente</span>';
+  if(r==='contratado') return '<span class="badge" style="background:#d1fae5;color:#065f46;border:1px solid #6ee7b7">🏆 Contratado</span>';
+  if(r==='desistente') return '<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d">🚫 Desistente</span>';
+  return '<span class="badge badge-gray">—</span>';
+}
+function funcTag(v){ return v?`<span class="func-tag">${v}</span>`:'<span style="color:var(--g500)">—</span>'; }
+function esc(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function fmtDate(d){ if(!d) return '—'; const [y,m,dd]=d.split('-'); return `${dd}/${m}/${y}`; }
+function localDate(d){ d=d||new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function calcIdade(nasc){ if(!nasc) return null; const b=new Date(nasc),t=new Date(); return t.getFullYear()-b.getFullYear()-(t<new Date(t.getFullYear(),b.getMonth(),b.getDate())?1:0); }
+function toast(msg,type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.borderLeftColor=type==='err'?'var(--red)':type==='warn'?'var(--orange)':'var(--gold)';
+  t.style.display='block';
+  setTimeout(()=>t.style.display='none',3500);
+}
+
+function entrevistaStatusLabel(c){
+  if(c.entrevistado) return 'sim';
+  const hoje = localDate();
+  if(c.dataEntrevista && c.dataEntrevista >= hoje) return 'agendado';
+  return 'nao';
+}
+function entrevistaBadge(c){
+  const s = entrevistaStatusLabel(c);
+  if(s==='sim')      return '<span class="badge badge-green">✓ Sim</span>';
+  if(s==='agendado') return `<span class="badge" style="background:#e8f4ff;color:#1d6fc4;border:1px solid #93c5fd">📅 Agendado · ${fmtDate(c.dataEntrevista)}${c.horaEntrevista?' às '+c.horaEntrevista:''}</span>`;
+  return '<span class="badge badge-gray">Não</span>';
+}
+
+function reminderStatus(c){
+  const base = c.ultimoContato || c.dataRecebimento;
+  if(!base) return 'ok';
+  const d = new Date(base);
+  const now = new Date();
+  const next = new Date(d);
+  next.setFullYear(next.getFullYear()+1);
+  const diff = (next-now)/(1000*60*60*24);
+  if(diff<0) return 'atrasado';
+  if(diff<=30) return 'em_breve';
+  return 'ok';
+}
+function nextContactDate(c){
+  const base = c.ultimoContato || c.dataRecebimento;
+  if(!base) return null;
+  const d = new Date(base);
+  d.setFullYear(d.getFullYear()+1);
+  return localDate(d);
+}
+
+// ==================== NAVIGATION ====================
+const _scrollPos = {};
+let _currentPage = 'dashboard';
+function navigate(page, forceTop=false){
+  // Save scroll position of current page
+  if(_currentPage) _scrollPos[_currentPage] = window.scrollY || document.documentElement.scrollTop;
+
+  // If same tab clicked again (double-tap) → scroll to top
+  if(page === _currentPage || forceTop){
+    window.scrollTo({top:0, behavior:'smooth'});
+    if(page==='dashboard') renderDashboard();
+    if(page==='candidatos') renderCandidatosList();
+    if(page==='agenda') renderAgenda();
+    if(page==='perfis') renderPerfis();
+    if(page==='stats'){ setTimeout(()=>renderStats(),50); }
+    _currentPage = page;
+    return;
+  }
+
+  _currentPage = page;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item,.mitem').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll(`[data-page="${page}"]`).forEach(el=>el.classList.add('active'));
+  if(page==='dashboard') renderDashboard();
+  if(page==='candidatos') renderCandidatosList();
+  if(page==='agenda') renderAgenda();
+  if(page==='perfis') renderPerfis();
+  if(page==='stats'){ setTimeout(()=>{ if(!document.getElementById('stats-from').value){ setStatsPeriod('month'); } else { renderStats(); } },50); }
+
+  // Restore saved scroll position for this page
+  setTimeout(()=>{
+    window.scrollTo({top: _scrollPos[page]||0, behavior:'instant'});
+  }, 50);
+}
+
+// ==================== DASHBOARD ====================
+function filterAndGo(search='', filters={}){
+  navigate('candidatos');
+  // reset all filters first
+  const s = document.getElementById('search');
+  const ff = document.getElementById('f-func');
+  const fs = document.getElementById('f-stars');
+  const fe = document.getElementById('f-entrev');
+  const fo = document.getElementById('f-order');
+  if(s) s.value = search;
+  if(ff) ff.value = filters.func||'';
+  if(fo) fo.value = filters.order||'recentes';
+  // stars filter: handle special case where we want non-zero
+  if(fs){
+    if(filters.invert){ fs.value=''; } // show all then we filter in render
+    else fs.value = filters.stars||'';
+  }
+  if(fe) fe.value = filters.entrev||'';
+  // store resultado filter for render
+  window._resultFilter = filters.resultado||'';
+  renderCandidatosList();
+}
+
+function renderDashboard(){
+  const all = candidates;
+  const active = all.filter(c=>c.classificacao>0);
+  const fp = all.filter(c=>c.classificacao===0);
+  const s3 = all.filter(c=>c.classificacao===3);
+  const s2 = all.filter(c=>c.classificacao===2);
+  const s1 = all.filter(c=>c.classificacao===1);
+  const entrev = all.filter(c=>c.entrevistado);
+  const aprov = all.filter(c=>c.resultadoEntrevista==='aprovado');
+  const reprov = all.filter(c=>c.resultadoEntrevista==='reprovado');
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card" onclick="filterAndGo('')"><div class="stat-label">Total de Currículos</div><div class="stat-value">${all.length}</div><div class="stat-sub">Ver todos ›</div></div>
+    <div class="stat-card" style="border-left-color:var(--gold)" onclick="filterAndGo('',{stars:'0',invert:true})"><div class="stat-label">No Banco Ativo</div><div class="stat-value">${active.length}</div><div class="stat-sub">${fp.length} fora do perfil ›</div></div>
+    <div class="stat-card" style="border-left-color:#f59e0b" onclick="filterAndGo('',{stars:'3'})"><div class="stat-label">⭐⭐⭐ 3 Estrelas</div><div class="stat-value">${s3.length}</div><div class="stat-sub">Ver recomendados ›</div></div>
+    <div class="stat-card blue" onclick="filterAndGo('',{entrev:'sim'})"><div class="stat-label">Entrevistados</div><div class="stat-value">${entrev.length}</div><div class="stat-sub">${all.length-entrev.length} aguardando ›</div></div>
+    <div class="stat-card green" onclick="filterAndGo('',{resultado:'aprovado'})"><div class="stat-label">Aprovados</div><div class="stat-value">${aprov.length}</div><div class="stat-sub">nas entrevistas ›</div></div>
+    <div class="stat-card red" onclick="filterAndGo('',{resultado:'reprovado'})"><div class="stat-label">Reprovados</div><div class="stat-value">${reprov.length}</div><div class="stat-sub">nas entrevistas ›</div></div>
+  `;
+
+  // Charts
+  const funcs = {};
+  candidates.forEach(c=>{ if(c.vaga){ funcs[c.vaga]=(funcs[c.vaga]||0)+1; } });
+  renderChart('chart-func','bar',Object.keys(funcs),Object.values(funcs),['#C9A02C','#1d3050','#22c55e','#3b82f6','#f59e0b']);
+  renderChart('chart-stars','doughnut',['3 Estrelas','2 Estrelas','1 Estrela','Fora do Perfil'],[s3.length,s2.length,s1.length,fp.length],['#f59e0b','#3b82f6','#8a96a8','#ef4444']);
+  // Gráfico de entrevistas: apenas candidatos 1, 2 e 3 estrelas
+  const elegivel = all.filter(c=>c.classificacao>0);
+  const elegEntrev = elegivel.filter(c=>c.entrevistado);
+  const elegAprov = elegivel.filter(c=>c.resultadoEntrevista==='aprovado');
+  const elegReprov = elegivel.filter(c=>c.resultadoEntrevista==='reprovado');
+  const elegPend = elegEntrev.filter(c=>c.resultadoEntrevista==='pendente');
+  const elegNaoEntrev = elegivel.filter(c=>!c.entrevistado);
+  renderChart('chart-interviews','doughnut',['Aprovados','Reprovados','Pendentes','Não entrev.'],[elegAprov.length,elegReprov.length,elegPend.length,elegNaoEntrev.length],['#22c55e','#ef4444','#f59e0b','#d0d7e2']);
+
+  // Top candidates
+  const hoje2 = localDate();
+  const top = candidates.filter(c=>c.classificacao===3 && !['aprovado','contratado','desistente'].includes(c.resultadoEntrevista) && !(c.dataEntrevista && c.dataEntrevista>=hoje2));
+  document.getElementById('top-candidates').innerHTML = top.length ? top.map(c=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--g200)">
+      <div style="flex:1"><div style="font-weight:700;font-size:14px">${c.nome}</div><div style="font-size:12px;color:var(--g500)">${c.vaga||'—'} · ${c.cidade||'—'}</div></div>
+      <div style="display:flex;gap:6px">
+      <button class="btn btn-outline btn-sm" onclick="openDetail('${c.id}')">Ver perfil</button>
+      <button class="btn btn-primary btn-sm" onclick="openAgendar('${c.id}')" title="Agendar entrevista via WhatsApp">📅 Agendar</button>
+    </div>
+    </div>
+  `).join('') : '<p style="color:var(--g500);font-size:13px">Nenhum candidato 3 estrelas pendente.</p>';
+
+  // Próximas entrevistas agendadas — ordenadas por data+hora, com "Ver mais"
+  const hoje = localDate();
+  const proxEntrevAll = candidates
+    .filter(c=>!c.entrevistado && c.dataEntrevista && c.dataEntrevista >= hoje)
+    .sort((a,b)=>{
+      const da = a.dataEntrevista+(a.horaEntrevista?'T'+a.horaEntrevista:'T00:00');
+      const db = b.dataEntrevista+(b.horaEntrevista?'T'+b.horaEntrevista:'T00:00');
+      return da.localeCompare(db);
+    });
+  const _ELIMIT = 5;
+  window.renderProxEntrev = function(showAll){
+    const list = showAll ? proxEntrevAll : proxEntrevAll.slice(0,_ELIMIT);
+    const hasMore = proxEntrevAll.length > _ELIMIT;
+    const el = document.getElementById('upcoming-interviews');
+    if(!el) return;
+    el.innerHTML = proxEntrevAll.length
+      ? list.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--g200)"><div class="agenda-dot dot-soon"></div><div style="flex:1"><div style="font-weight:700;font-size:13px">${esc(c.nome)}</div><div style="font-size:12px;color:var(--g500)">📅 ${fmtDate(c.dataEntrevista)}${c.horaEntrevista?' às '+c.horaEntrevista:''} · ${c.vaga||'—'}</div></div><button class="btn btn-outline btn-sm" onclick="openDetail('${c.id}')">Ver</button></div>`).join('')
+        +(hasMore&&!showAll?`<div style="text-align:center;padding:8px 0"><button class="btn btn-outline btn-sm" onclick="renderProxEntrev(true)">Ver mais (${proxEntrevAll.length-_ELIMIT}) ▾</button></div>`:'')
+        +(hasMore&&showAll ?`<div style="text-align:center;padding:8px 0"><button class="btn btn-outline btn-sm" onclick="renderProxEntrev(false)">Ver menos ▴</button></div>`:'')
+      : '<p style="color:var(--g500);font-size:13px">Nenhuma entrevista agendada.</p>';
+  };
+  renderProxEntrev(false);
+
+  // Upcoming network
+  const remind = candidates.filter(c=>c.classificacao>0).map(c=>({...c,_status:reminderStatus(c),_next:nextContactDate(c)})).filter(c=>c._status!=='ok').sort((a,b)=>a._status==='atrasado'?-1:1).slice(0,5);
+  document.getElementById('upcoming-reminders').innerHTML = remind.length ? remind.map(c=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--g200)">
+      <div class="agenda-dot ${c._status==='atrasado'?'dot-overdue':'dot-soon'}"></div>
+      <div style="flex:1"><div style="font-weight:700;font-size:13px">${c.nome}</div><div style="font-size:12px;color:var(--g500)">${c._status==='atrasado'?'⚠️ Vencido':'📌 Em breve'} · ${c._next?fmtDate(c._next):'—'}</div></div>
+    </div>
+  `).join('') : '<p style="color:var(--g500);font-size:13px">Nenhum contato pendente de network.</p>';
+}
+
+const labelPlugin = {
+  id:'labelPlugin',
+  afterDatasetsDraw(chart){
+    const {ctx,data}=chart;
+    ctx.save();
+    const total=data.datasets[0].data.reduce((a,b)=>a+(+b),0);
+    if(chart.config.type==='doughnut'){
+      chart.getDatasetMeta(0).data.forEach((arc,i)=>{
+        const val=+data.datasets[0].data[i];
+        if(!val||!total) return;
+        const pct=Math.round(val/total*100);
+        if(pct<5) return;
+        const mid=arc.startAngle+(arc.endAngle-arc.startAngle)/2;
+        const r=(arc.innerRadius+arc.outerRadius)/2;
+        ctx.fillStyle='#fff';
+        ctx.font='bold 11px Segoe UI,sans-serif';
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        ctx.fillText(pct+'%', arc.x+Math.cos(mid)*r, arc.y+Math.sin(mid)*r);
+      });
+    }
+    if(chart.config.type==='bar'){
+      const total2=data.datasets[0].data.reduce((a,b)=>a+(+b),0);
+      chart.getDatasetMeta(0).data.forEach((bar,i)=>{
+        const val=+data.datasets[0].data[i];
+        if(!val) return;
+        const pct=total2>0?Math.round(val/total2*100):0;
+        ctx.fillStyle='#4a5568';
+        ctx.font='bold 11px Segoe UI,sans-serif';
+        ctx.textAlign='center';
+        ctx.textBaseline='bottom';
+        ctx.fillText(`${val} (${pct}%)`, bar.x, bar.y-3);
+      });
+    }
+    ctx.restore();
+  }
+};
+
+let charts={};
+function renderChart(id,type,labels,data,colors){
+  if(charts[id]) charts[id].destroy();
+  const ctx=document.getElementById(id)?.getContext('2d');
+  if(!ctx) return;
+  charts[id]=new Chart(ctx,{
+    type,
+    data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:type==='doughnut'?2:0,borderRadius:type==='bar'?4:0}]},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}},scales:type==='bar'?{y:{beginAtZero:true,ticks:{stepSize:1},grace:'15%'}}:{}},
+    plugins:[labelPlugin]
+  });
+}
+
+// ==================== CANDIDATOS LIST ====================
+function renderCandidatosList(){
+  const q=(document.getElementById('search')?.value||'').toLowerCase();
+  const fFunc=document.getElementById('f-func')?.value||'';
+  const fStars=document.getElementById('f-stars')?.value||'';
+  const fEntrev=document.getElementById('f-entrev')?.value||'';
+  const fOrder=document.getElementById('f-order')?.value||'recentes';
+
+  let list=[...candidates];
+  if(q) list=list.filter(c=>c.nome.toLowerCase().includes(q));
+  if(fFunc) list=list.filter(c=>c.vaga===fFunc);
+  if(fStars!=='') list=list.filter(c=>c.classificacao===parseInt(fStars));
+  if(fEntrev==='sim')      list=list.filter(c=>c.entrevistado);
+  if(fEntrev==='agendado') list=list.filter(c=>entrevistaStatusLabel(c)==='agendado');
+  if(fEntrev==='nao')      list=list.filter(c=>entrevistaStatusLabel(c)==='nao');
+  if(window._resultFilter) list=list.filter(c=>c.resultadoEntrevista===window._resultFilter);
+  const fResultStatus = document.getElementById('f-result-status')?.value;
+  if(fResultStatus) list=list.filter(c=>c.resultadoEntrevista===fResultStatus);
+  if(fOrder==='recentes') list.sort((a,b)=>b.dataRecebimento.localeCompare(a.dataRecebimento));
+  if(fOrder==='stars') list.sort((a,b)=>b.classificacao-a.classificacao);
+  if(fOrder==='nome') list.sort((a,b)=>a.nome.localeCompare(b.nome));
+
+  document.getElementById('candidatos-count').textContent=`${list.length} candidato${list.length!==1?'s':''} encontrado${list.length!==1?'s':''}`;
+  // Desktop table
+  document.getElementById('candidatos-tbody').innerHTML = list.map(c=>`
+    <tr>
+      <td><strong style="cursor:pointer;color:var(--navy)" onclick="openDetail('${c.id}')">${c.nome}</strong>${c.indicacao?`<br><span style="font-size:11px;color:var(--g500)">Indicação: ${c.indicacao}</span>`:''}</td>
+      <td>${funcTag(c.vaga)}</td>
+      <td>${starBadge(c.classificacao)}</td>
+      <td style="font-size:12px;color:var(--g700)">${c.cidade||'—'}</td>
+      <td style="font-size:12px">${fmtDate(c.dataRecebimento)}</td>
+      <td>${entrevistaBadge(c)}</td>
+      <td>${c.entrevistado?resultBadge(c.resultadoEntrevista):'<span style="color:var(--g500);font-size:12px">—</span>'}</td>
+      <td style="white-space:nowrap"><button class="btn btn-outline btn-sm" onclick="openDetail('${c.id}')">👁 Ver</button> <button class="btn btn-outline btn-sm" onclick="openEdit('${c.id}')">✏️</button>${c.telefone?` <button class="btn btn-primary btn-sm" onclick="openAgendar('${c.id}')" title="Agendar via WhatsApp">📅</button>`:''}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--g500)">Nenhum candidato encontrado.</td></tr>';
+  // Mobile cards
+  const sClass={3:'s3',2:'s2',1:'s1',0:'s0'};
+  document.getElementById('mobile-cards').innerHTML = list.length ? list.map(c=>`
+    <div class="m-card ${sClass[c.classificacao]||''}" onclick="openDetail('${c.id}')">
+      <div class="m-card-top">
+        <div>
+          <div class="m-card-name">${c.nome}</div>
+          <div style="font-size:12px;color:var(--g500);margin-top:2px">${c.cidade||'—'} · Recebido ${fmtDate(c.dataRecebimento)}</div>
+        </div>
+        <div>${starBadge(c.classificacao)}</div>
+      </div>
+      <div class="m-card-meta">
+        ${funcTag(c.vaga)}
+        ${c.entrevistado?resultBadge(c.resultadoEntrevista):entrevistaBadge(c)}
+        ${c.classificacao===3?'<span class="badge badge-orange">📌 Recomendar</span>':''}
+      </div>
+      <div class="m-card-actions">
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openDetail('${c.id}')">👁 Ver Perfil</button>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openEdit('${c.id}')">✏️ Editar</button>
+        ${c.telefone?`<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAgendar('${c.id}')">📅 Agendar</button>`:''}
+      </div>
+    </div>
+  `).join('') : '<p style="text-align:center;color:var(--g500);padding:30px">Nenhum candidato encontrado.</p>';
+}
+
+// ==================== AGENDA ====================
+function renderAgenda(){
+  const active = candidates.filter(c=>c.classificacao>0);
+  const overdue = active.filter(c=>reminderStatus(c)==='atrasado');
+  const soon = active.filter(c=>reminderStatus(c)==='em_breve');
+  const ok = active.filter(c=>reminderStatus(c)==='ok');
+
+  document.getElementById('agenda-stats').innerHTML=`
+    <div class="stat-card red"><div class="stat-label">Contatos Vencidos</div><div class="stat-value">${overdue.length}</div><div class="stat-sub">Passar de 1 ano sem contato</div></div>
+    <div class="stat-card orange"><div class="stat-label">Próximos 30 dias</div><div class="stat-value">${soon.length}</div><div class="stat-sub">Prioridade de contato</div></div>
+    <div class="stat-card green"><div class="stat-label">Em dia</div><div class="stat-value">${ok.length}</div><div class="stat-sub">Contato realizado recentemente</div></div>
+    <div class="stat-card"><div class="stat-label">Total no Network</div><div class="stat-value">${active.length}</div><div class="stat-sub">Candidatos acompanhados</div></div>
+  `;
+
+  const f = document.getElementById('agenda-filter')?.value||'todos';
+  let list = active.map(c=>({...c,_st:reminderStatus(c),_next:nextContactDate(c)}));
+  if(f==='atrasado') list=list.filter(c=>c._st==='atrasado');
+  if(f==='em_breve') list=list.filter(c=>c._st==='em_breve');
+  if(f==='ok') list=list.filter(c=>c._st==='ok');
+  list.sort((a,b)=>{const o={atrasado:0,em_breve:1,ok:2};return o[a._st]-o[b._st];});
+
+  document.getElementById('agenda-list').innerHTML = list.length ? list.map(c=>`
+    <div class="agenda-item">
+      <div class="agenda-dot ${c._st==='atrasado'?'dot-overdue':c._st==='em_breve'?'dot-soon':'dot-ok'}"></div>
+      <div style="flex:1">
+        <div class="agenda-name">${c.nome}</div>
+        <div class="agenda-meta">${funcTag(c.vaga||'—')} · ${starBadge(c.classificacao)} · Próximo contato: <strong>${c._next?fmtDate(c._next):'Definir'}</strong>${c.ultimoContato?` · Último: ${fmtDate(c.ultimoContato)}`:''}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a href="https://wa.me/55${(c.telefone||'').replace(/\D/g,'').slice(0,11)}" target="_blank" class="btn btn-outline btn-sm" title="WhatsApp">💬</a>
+        <button class="btn btn-primary btn-sm" onclick="markContacted('${c.id}')">✓ Contatado</button>
+      </div>
+    </div>
+  `).join('') : '<p style="color:var(--g500);text-align:center;padding:30px">Nenhum contato para mostrar.</p>';
+}
+
+function markContacted(id){
+  const c = candidates.find(x=>x.id===id);
+  if(!c) return;
+  c.ultimoContato = localDate();
+  saveData(); renderAgenda(); toast('Contato registrado para '+c.nome);
+}
+
+// ==================== PERFIS ====================
+let perfis = [];
+
+function loadPerfis(){
+  const saved = localStorage.getItem('rs_perfis');
+  perfis = saved ? JSON.parse(saved) : PERFIS.map(p=>({...p}));
+}
+function savePerfis(){
+  localStorage.setItem('rs_perfis', JSON.stringify(perfis));
+  syncToCloud(); // sincroniza perfis junto com candidatos
+}
+
+function renderPerfis(){
+  document.getElementById('perfis-list').innerHTML = perfis.map((p,i)=>`
+    <div class="profile-card">
+      <div class="profile-hdr" style="justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">📋</span><h3>${p.codigo} — ${p.nome}</h3></div>
+        <button class="btn btn-outline btn-sm" style="border-color:rgba(255,255,255,.3);color:var(--white)" onclick="openEditPerfil(${i})">✏️ Editar Perfil</button>
+      </div>
+      <div class="profile-body">
+        <div>
+          <div class="card-title" style="margin-bottom:10px">✅ Tem que Ter</div>
+          <ul class="profile-list">${p.tem.map(x=>`<li>${x}</li>`).join('')}</ul>
+          ${p.obs?`<div style="margin-top:12px;font-size:12px;background:rgba(201,160,44,.08);border-left:3px solid var(--gold);padding:8px 12px;border-radius:4px;color:var(--g700)"><strong>OBS:</strong> ${p.obs}</div>`:''}
+        </div>
+        <div>
+          <div class="card-title" style="margin-bottom:10px">⭐ Desejável que Tenha</div>
+          <ul class="profile-list">${p.desejavel.map(x=>`<li>${x}</li>`).join('')}</ul>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openEditPerfil(idx){
+  const p = perfis[idx];
+  document.getElementById('modal-title').textContent = `Editar Perfil — ${p.nome}`;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-grid">
+      <div class="form-group"><label>Código</label><input id="pf-cod" value="${p.codigo}"></div>
+      <div class="form-group"><label>Nome da Vaga</label><input id="pf-nome" value="${p.nome}"></div>
+      <div class="form-group full">
+        <label>✅ Tem que Ter <span style="font-weight:400;color:var(--g500)">(um critério por linha)</span></label>
+        <textarea id="pf-tem" style="min-height:160px">${esc(p.tem.join('\n'))}</textarea>
+      </div>
+      <div class="form-group full">
+        <label>⭐ Desejável que Tenha <span style="font-weight:400;color:var(--g500)">(um critério por linha)</span></label>
+        <textarea id="pf-des" style="min-height:120px">${p.desejavel.join('\n')}</textarea>
+      </div>
+      <div class="form-group full"><label>Observação (OBS)</label><textarea id="pf-obs">${p.obs||''}</textarea></div>
+    </div>
+  `;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="savePerfil(${idx})">💾 Salvar Perfil</button>
+  `;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function savePerfil(idx){
+  const tem = document.getElementById('pf-tem').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const des = document.getElementById('pf-des').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!tem.length){ toast('Adicione ao menos um critério em "Tem que Ter"','err'); return; }
+  perfis[idx] = {
+    codigo: document.getElementById('pf-cod').value.trim(),
+    nome: document.getElementById('pf-nome').value.trim(),
+    tem, desejavel: des,
+    obs: document.getElementById('pf-obs').value.trim()||undefined
+  };
+  savePerfis(); closeModal(); renderPerfis();
+  toast('Perfil atualizado com sucesso!');
+}
+
+// ==================== MODAL DETAIL ====================
+function openDetail(id){
+  const c = candidates.find(x=>x.id===id);
+  if(!c) return;
+  const idade = calcIdade(c.nascimento);
+  document.getElementById('modal-title').textContent = c.nome;
+  document.getElementById('modal-body').innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+      ${starBadge(c.classificacao)} ${funcTag(c.vaga)} ${c.entrevistado?resultBadge(c.resultadoEntrevista):entrevistaBadge(c)}
+      ${c.classificacao===3?'<span class="badge badge-orange">📌 Recomendado para entrevista</span>':''}
+    </div>
+    <div class="detail-section">
+      <h4>Dados Pessoais</h4>
+      <div class="detail-row"><span class="lbl">Telefone</span><span>${c.telefone||'—'} ${c.telefone?`<a href="https://wa.me/55${c.telefone.replace(/\D/g,'').slice(0,11)}" target="_blank" style="color:var(--gold);font-size:12px;margin-left:6px">💬 WhatsApp</a>`:''}</span></div>
+      <div class="detail-row"><span class="lbl">E-mail</span><span>${c.email||'—'}</span></div>
+      <div class="detail-row"><span class="lbl">Cidade</span><span>${c.cidade||'—'}</span></div>
+      <div class="detail-row"><span class="lbl">Nascimento</span><span>${c.nascimento?fmtDate(c.nascimento)+(idade?` (${idade} anos)`:''): '—'}</span></div>
+      <div class="detail-row"><span class="lbl">Estado Civil</span><span>${c.estadoCivil||'—'}</span></div>
+      <div class="detail-row"><span class="lbl">Indicação</span><span>${c.indicacao||'—'}</span></div>
+      <div class="detail-row"><span class="lbl">Recebido em</span><span>${fmtDate(c.dataRecebimento)}</span></div>
+    </div>
+    <div class="detail-section">
+      <h4>Formação</h4>
+      <p style="font-size:13px;color:var(--g700)">${c.formacao||'—'}</p>
+    </div>
+    <div class="detail-section">
+      <h4>Experiência Profissional</h4>
+      ${(c.experiencias||[]).map(e=>`<div class="exp-item"><div class="cargo">${e.cargo}</div><div class="emp">${e.empresa}</div><div class="per">${e.periodo}</div></div>`).join('')||'<p style="color:var(--g500);font-size:13px">—</p>'}
+    </div>
+    <div class="detail-section">
+      <h4>Parecer do Entrevistador</h4>
+      <p style="font-size:13px;color:var(--g700);line-height:1.7;background:var(--g100);padding:12px;border-radius:6px">${c.parecer||'—'}</p>
+    </div>
+    ${(c.entrevistado||c.dataEntrevista)?`<div class="detail-section"><h4>${c.entrevistado?'Registro de Entrevista':'📅 Entrevista Agendada'}</h4>
+      <div class="detail-row"><span class="lbl">Data</span><span>${fmtDate(c.dataEntrevista)} ${c.horaEntrevista?'às '+c.horaEntrevista:''}</span></div>
+      <div class="detail-row"><span class="lbl">Resultado</span><span>${resultBadge(c.resultadoEntrevista)}</span></div>
+      ${c.notaFinal?`<div class="detail-row"><span class="lbl">Nota Final</span><span><strong>${c.notaFinal}</strong>/5</span></div>`:''}
+    </div>`:''}
+    ${c.observacoes?`<div class="detail-section"><h4>Observações</h4><p style="font-size:13px;color:var(--g700);line-height:1.7">${c.observacoes}</p></div>`:''}
+    <div class="detail-section">
+      <h4>Network</h4>
+      <div class="detail-row"><span class="lbl">Último Contato</span><span>${c.ultimoContato?fmtDate(c.ultimoContato):'Ainda não contatado'}</span></div>
+      <div class="detail-row"><span class="lbl">Próximo Contato</span><span>${nextContactDate(c)?fmtDate(nextContactDate(c)):'—'}</span></div>
+    </div>
+  `;
+  document.getElementById('modal-footer').innerHTML = `
+    <button class="btn btn-outline" onclick="markContacted('${c.id}');closeModal()">✓ Registrar Contato</button>
+    <button class="btn btn-outline" onclick="openEdit('${c.id}')">✏️ Editar</button>
+    <button class="btn btn-primary" onclick="closeModal()">Fechar</button>
+  `;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+// ==================== MODAL EDIT / NEW ====================
+function openNewCandidate(){
+  editingId = null;
+  showForm(null);
+}
+function openEdit(id){
+  editingId = id;
+  const c = candidates.find(x=>x.id===id);
+  showForm(c);
+}
+
+function showForm(c){
+  document.getElementById('modal-title').textContent = c ? 'Editar Candidato — '+esc(c.nome) : 'Novo Candidato';
+  const stars = c ? c.classificacao : '';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="form-grid">
+      <div class="form-group full"><label>Nome Completo *</label><input id="f-nome" value="${esc(c?c.nome:'')}" placeholder="Nome do candidato"></div>
+      <div class="form-group"><label>Função Pretendida</label>
+        <select id="f-vaga">
+          <option value="">Selecionar...</option>
+          ${VAGAS.map(v=>`<option ${c&&c.vaga===v?'selected':''}>${v}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>Cidade</label><input id="f-cidade" value="${esc(c?c.cidade||'':'')}" placeholder="Cidade - UF"></div>
+      <div class="form-group"><label>Telefone</label><input id="f-tel" value="${esc(c?c.telefone||'':'')}" placeholder="(24) 99999-9999"></div>
+      <div class="form-group"><label>E-mail</label><input id="f-email" value="${esc(c?c.email||'':'')}" placeholder="email@exemplo.com"></div>
+      <div class="form-group"><label>Nascimento</label><input id="f-nasc" type="date" value="${esc(c?c.nascimento||'':'')}"></div>
+      <div class="form-group"><label>Estado Civil</label><input id="f-civil" value="${esc(c?c.estadoCivil||'':'')}" placeholder="Solteiro, Casado..."></div>
+      <div class="form-group"><label>Indicação</label><input id="f-ind" value="${esc(c?c.indicacao||'':'')}" placeholder="Nome de quem indicou"></div>
+      <div class="form-group full"><label>Formação</label><input id="f-form" value="${esc(c?c.formacao||'':'')}" placeholder="Ensino médio, faculdade..."></div>
+      <div class="form-group full"><label>Classificação *</label>
+        <div class="star-selector">
+          <div class="star-opt${stars===3?' sel':''}" onclick="selStar(3)">⭐⭐⭐ 3 Estrelas</div>
+          <div class="star-opt${stars===2?' sel':''}" onclick="selStar(2)">⭐⭐ 2 Estrelas</div>
+          <div class="star-opt${stars===1?' sel':''}" onclick="selStar(1)">⭐ 1 Estrela</div>
+          <div class="star-opt fp${stars===0?' sel':''}" onclick="selStar(0)">✕ Fora do Perfil</div>
+        </div>
+        <input type="hidden" id="f-stars-val" value="${stars}">
+      </div>
+      <div class="form-group"><label>Entrevistado?</label>
+        <select id="f-entrev-bool">
+          <option value="nao" ${c&&!c.entrevistado?'selected':''}>Não</option>
+          <option value="sim" ${c&&c.entrevistado?'selected':''}>Sim</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Data da Entrevista
+        ${c&&c.dataEntrevista?'<button type="button" onclick="cancelarEntrevista()" style="margin-left:8px;font-size:11px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:4px;padding:1px 6px;cursor:pointer">✕ Cancelar</button>':''}
+      </label><input id="f-data-entrev" type="date" value="${esc(c?c.dataEntrevista||'':'')}"></div>
+      <div class="form-group"><label>Hora da Entrevista</label><input id="f-hora-entrev" type="time" value="${esc(c?c.horaEntrevista||'':'')}"></div>
+      <div class="form-group"><label>Resultado da Entrevista</label>
+        <select id="f-result">
+          <option value="">—</option>
+          <option value="pendente" ${c&&c.resultadoEntrevista==='pendente'?'selected':''}>Pendente</option>
+          <option value="aprovado" ${c&&c.resultadoEntrevista==='aprovado'?'selected':''}>Aprovado</option>
+          <option value="reprovado" ${c&&c.resultadoEntrevista==='reprovado'?'selected':''}>Reprovado</option>
+          <option value="contratado" ${c&&c.resultadoEntrevista==='contratado'?'selected':''}>🏆 Contratado</option>
+          <option value="desistente" ${c&&c.resultadoEntrevista==='desistente'?'selected':''}>🚫 Desistente</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Nota Final (1–5)</label><input id="f-nota" type="number" min="1" max="5" step="0.1" value="${esc(c?c.notaFinal||'':'')}"></div>
+      <div class="form-group full"><label>Parecer / Análise do Currículo</label><textarea id="f-parecer">${esc(c?c.parecer||'':'')}</textarea></div>
+      <div class="form-group full"><label>Observações Internas</label><textarea id="f-obs">${esc(c?c.observacoes||'':'')}</textarea></div>
+      <div class="form-group"><label>Data de Recebimento do Currículo</label><input id="f-dreceb" type="date" value="${c?c.dataRecebimento:localDate()}"></div>
+    </div>
+  `;
+  document.getElementById('modal-footer').innerHTML = `
+    ${c?`<button class="btn btn-danger btn-sm" onclick="deleteCandidate('${c.id}')">🗑 Excluir</button>`:''}
+    <div style="flex:1"></div>
+    <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+    <button class="btn btn-primary" onclick="saveCandidate()">💾 Salvar</button>
+  `;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+let _selectedStar = '';
+function selStar(n){
+  _selectedStar = n;
+  document.getElementById('f-stars-val').value = n;
+  document.querySelectorAll('.star-opt').forEach(el=>el.classList.remove('sel'));
+  document.querySelectorAll('.star-opt')[n===3?0:n===2?1:n===1?2:3]?.classList.add('sel');
+}
+
+function cancelarEntrevista(){
+  document.getElementById('f-data-entrev').value = '';
+  document.getElementById('f-hora-entrev').value = '';
+  const fEntrevBool = document.getElementById('f-entrev-bool');
+  if(fEntrevBool && fEntrevBool.value === 'nao') fEntrevBool.value = 'nao';
+  toast('Data de entrevista removida — salve para confirmar.','warn');
+  // Remove cancel button since date is now cleared
+  const cancelBtn = document.querySelector('button[onclick="cancelarEntrevista()"]');
+  if(cancelBtn) cancelBtn.style.display='none';
+}
+function saveCandidate(){
+  const nome = document.getElementById('f-nome').value.trim();
+  if(!nome){ toast('Nome é obrigatório','err'); return; }
+  const starsVal = document.getElementById('f-stars-val').value;
+  if(starsVal===''){ toast('Selecione a classificação','err'); return; }
+
+  // Duplicate check
+  if(!editingId){
+    const dup = candidates.find(c=>c.nome.toLowerCase()===nome.toLowerCase());
+    if(dup){ toast(`⚠️ Candidato "${nome}" já existe no banco!`, 'warn'); return; }
+  }
+
+  const obj = {
+    id: editingId || genId(),
+    nome,
+    vaga: document.getElementById('f-vaga').value||null,
+    cidade: document.getElementById('f-cidade').value||null,
+    telefone: document.getElementById('f-tel').value||null,
+    email: document.getElementById('f-email').value||null,
+    nascimento: document.getElementById('f-nasc').value||null,
+    estadoCivil: document.getElementById('f-civil').value||null,
+    indicacao: document.getElementById('f-ind').value||null,
+    formacao: document.getElementById('f-form').value||null,
+    classificacao: parseInt(starsVal),
+    entrevistado: document.getElementById('f-entrev-bool').value==='sim',
+    dataEntrevista: document.getElementById('f-data-entrev').value||null,
+    horaEntrevista: document.getElementById('f-hora-entrev')?.value||null,
+    resultadoEntrevista: document.getElementById('f-result').value||null,
+    notaFinal: document.getElementById('f-nota').value||null,
+    parecer: document.getElementById('f-parecer').value||null,
+    observacoes: document.getElementById('f-obs').value||null,
+    dataRecebimento: document.getElementById('f-dreceb').value||localDate(),
+    ultimaAtualizacao: localDate(),
+    ultimoContato: editingId ? (candidates.find(c=>c.id===editingId)?.ultimoContato||null) : null,
+    experiencias: editingId ? (candidates.find(c=>c.id===editingId)?.experiencias||[]) : []
+  };
+
+  if(editingId){ const i=candidates.findIndex(c=>c.id===editingId); candidates[i]=obj; }
+  else { candidates.unshift(obj); }
+  saveData(); closeModal();
+  toast(editingId?'Candidato atualizado!':'Candidato adicionado ao banco!');
+  navigate('candidatos');
+}
+
+function deleteCandidate(id){
+  if(!confirm('Excluir este candidato do banco?')) return;
+  candidates = candidates.filter(c=>c.id!==id);
+  saveData(); closeModal(); toast('Candidato removido.','warn');
+  renderCandidatosList();
+}
+
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+  editingId=null;
+}
+
+// ==================== EXCEL EXPORT ====================
+function exportExcel(){
+  const rows = candidates.map(c=>({
+    'ID': c.id,
+    'Nome': c.nome,
+    'Função': c.vaga||'',
+    'Classificação': c.classificacao===3?'3 Estrelas':c.classificacao===2?'2 Estrelas':c.classificacao===1?'1 Estrela':'Fora do Perfil',
+    'Telefone': c.telefone||'',
+    'E-mail': c.email||'',
+    'Cidade': c.cidade||'',
+    'Nascimento': c.nascimento||'',
+    'Estado Civil': c.estadoCivil||'',
+    'Formação': c.formacao||'',
+    'Entrevistado': c.entrevistado?'Sim':'Não',
+    'Data Entrevista': c.dataEntrevista||'',
+    'Hora Entrevista': c.horaEntrevista||'',
+    'Resultado': c.resultadoEntrevista||'',
+    'Nota Final': c.notaFinal||'',
+    'Parecer': c.parecer||'',
+    'Observações': c.observacoes||'',
+    'Data Recebimento': c.dataRecebimento||'',
+    'Último Contato Network': c.ultimoContato||'',
+    'Indicação': c.indicacao||''
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Candidatos');
+  XLSX.writeFile(wb, `BancoCandidatos_CEM_${localDate()}.xlsx`);
+  toast('Exportado com sucesso!');
+}
+
+// ==================== EXCEL IMPORT ====================
+function importExcel(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
+      let added=0, updated=0, dups=0;
+      rows.forEach(r=>{
+        const nome = r['Nome']?.trim();
+        if(!nome) return;
+        const existing = candidates.find(c=>c.nome.toLowerCase()===nome.toLowerCase());
+        const starMap={'3 Estrelas':3,'2 Estrelas':2,'1 Estrela':1,'Fora do Perfil':0};
+        const obj = {
+          id: r['ID']||genId(), nome,
+          vaga: r['Função']||null, telefone: r['Telefone']||null, email: r['E-mail']||null,
+          cidade: r['Cidade']||null, nascimento: r['Nascimento']||null, estadoCivil: r['Estado Civil']||null,
+          formacao: r['Formação']||null, indicacao: r['Indicação']||null,
+          classificacao: starMap[r['Classificação']]??1,
+          entrevistado: r['Entrevistado']==='Sim', dataEntrevista: r['Data Entrevista']||null,
+          resultadoEntrevista: r['Resultado']||null, notaFinal: r['Nota Final']||null,
+          parecer: r['Parecer']||null, observacoes: r['Observações']||null,
+          dataRecebimento: r['Data Recebimento']||localDate(),
+          ultimoContato: r['Último Contato Network']||null,
+          ultimaAtualizacao: localDate(), experiencias:[]
+        };
+        if(existing){
+          const changed = JSON.stringify({...existing,ultimaAtualizacao:''})!==JSON.stringify({...obj,ultimaAtualizacao:''});
+          if(changed){ const i=candidates.findIndex(c=>c.id===existing.id); candidates[i]={...existing,...obj,id:existing.id,experiencias:existing.experiencias}; updated++; }
+          else dups++;
+        } else { candidates.unshift(obj); added++; }
+      });
+      saveData();
+      toast(`Importado: ${added} novos, ${updated} atualizados, ${dups} sem alteração.`);
+      navigate('candidatos');
+    } catch(err){ toast('Erro ao importar: '+err.message,'err'); }
+  };
+  reader.readAsBinaryString(file);
+  input.value='';
+}
+
+// ==================== MOBILE TOOLS ====================
+function showMobileTools(){
+  document.getElementById('modal-title').textContent = 'Ferramentas';
+  document.getElementById('modal-body').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-outline" style="justify-content:flex-start;padding:14px 16px;font-size:14px" onclick="openNewCandidate()">➕ Novo Candidato</button>
+      <button class="btn btn-outline" style="justify-content:flex-start;padding:14px 16px;font-size:14px" onclick="exportExcel();closeModal()">📥 Exportar Excel</button>
+      <button class="btn btn-outline" style="justify-content:flex-start;padding:14px 16px;font-size:14px" onclick="document.getElementById('import-file').click();closeModal()">📤 Importar Excel</button>
+      <button class="btn btn-outline" style="justify-content:flex-start;padding:14px 16px;font-size:14px" onclick="localStorage.removeItem('rs_skip_sync');location.reload()">🔄 Verificar sincronização</button>
+    </div>
+  `;
+  document.getElementById('modal-footer').innerHTML = '<button class="btn btn-outline" style="width:100%;justify-content:center" onclick="closeModal()">Fechar</button>';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+// ==================== SYNC / STARTUP ====================
+function showStartupModal(){
+  return; // Desativado — sincronização via Google Sheets
+  if(localStorage.getItem('rs_skip_sync')==='1') return;
+  const saved = localStorage.getItem('rs_candidates');
+  const count = saved ? JSON.parse(saved).length : 0;
+  const lastSave = localStorage.getItem('rs_last_save');
+  const infoEl = document.getElementById('sync-info');
+  if(count>0){
+    infoEl.innerHTML = `<strong>📊 ${count} candidatos</strong> carregados no cache local${lastSave?'<br>⏱ Última gravação: <strong>'+lastSave+'</strong>':''}`;
+  } else {
+    infoEl.innerHTML = '<strong>📭 Nenhum dado local encontrado.</strong><br>Carregue uma planilha Excel para começar.';
+  }
+  document.getElementById('sync-overlay').style.display='flex';
+}
+
+function continueLocal(){
+  if(document.getElementById('skip-sync').checked) localStorage.setItem('rs_skip_sync','1');
+  document.getElementById('sync-overlay').style.display='none';
+  renderDashboard();
+}
+
+function loadFromExcelSync(){
+  document.getElementById('sync-file').click();
+}
+
+function importExcelSync(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
+      let added=0, updated=0;
+      const starMap={'3 Estrelas':3,'2 Estrelas':2,'1 Estrela':1,'Fora do Perfil':0};
+      rows.forEach(r=>{
+        const nome = r['Nome']?.trim(); if(!nome) return;
+        const existing = candidates.find(c=>c.nome.toLowerCase()===nome.toLowerCase());
+        const obj = {
+          id: r['ID']||genId(), nome,
+          vaga: r['Função']||null, telefone: r['Telefone']||null, email: r['E-mail']||null,
+          cidade: r['Cidade']||null, nascimento: r['Nascimento']||null, estadoCivil: r['Estado Civil']||null,
+          formacao: r['Formação']||null, indicacao: r['Indicação']||null,
+          classificacao: starMap[r['Classificação']]??1,
+          entrevistado: r['Entrevistado']==='Sim', dataEntrevista: r['Data Entrevista']||null,
+          resultadoEntrevista: r['Resultado']||null, notaFinal: r['Nota Final']||null,
+          parecer: r['Parecer']||null, observacoes: r['Observações']||null,
+          dataRecebimento: r['Data Recebimento']||localDate(),
+          ultimoContato: r['Último Contato Network']||null,
+          ultimaAtualizacao: localDate(), experiencias:[]
+        };
+        if(existing){ const i=candidates.findIndex(c=>c.id===existing.id); candidates[i]={...existing,...obj,id:existing.id,experiencias:existing.experiencias}; updated++; }
+        else { candidates.unshift(obj); added++; }
+      });
+      saveData();
+      document.getElementById('sync-overlay').style.display='none';
+      input.value='';
+      toast(`✅ Sincronizado: ${added} novos, ${updated} atualizados.`);
+      navigate('dashboard');
+    } catch(err){ toast('Erro ao carregar: '+err.message,'err'); }
+  };
+  reader.readAsBinaryString(file);
+}
+
+
+// ==================== AGENDAR ENTREVISTA ====================
+let _agendarId = null;
+
+function openAgendar(id){
+  const c = candidates.find(x=>x.id===id);
+  if(!c) return;
+  _agendarId = id;
+  const primeiroNome = (c.nome||'').split(' ')[0];
+  const tel = (c.telefone||'').replace(/\D/g,'');
+  document.getElementById('agendar-nome').textContent = c.nome;
+  document.getElementById('agendar-tel').textContent = c.telefone || 'Sem telefone cadastrado';
+  document.getElementById('agendar-data').value = '';
+  document.getElementById('agendar-hora').value = '';
+  document.getElementById('agendar-preview').textContent = 'Preencha a data e a hora para visualizar a mensagem.';
+  document.getElementById('agendar-overlay').style.display = 'flex';
+
+  // Atualiza preview em tempo real
+  ['agendar-data','agendar-hora'].forEach(id=>{
+    document.getElementById(id).oninput = ()=>atualizarPreview(primeiroNome);
+  });
+}
+
+function atualizarPreview(primeiroNome){
+  const dataVal = document.getElementById('agendar-data').value;
+  const horaVal = document.getElementById('agendar-hora').value;
+  const dataFmt = dataVal ? new Date(dataVal+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}) : '(data)';
+  const horaFmt = horaVal || '(hora)';
+  document.getElementById('agendar-preview').textContent =
+    `Olá, ${primeiroNome}!\n\nGostaria de agendar uma entrevista com você na Lojas CEM em Barra Mansa no dia ${dataFmt}. Podemos agendar às ${horaFmt}?`;
+}
+
+function closeAgendar(){
+  document.getElementById('agendar-overlay').style.display = 'none';
+  _agendarId = null;
+}
+
+function enviarWhatsApp(){
+  const c = candidates.find(x=>x.id===_agendarId);
+  if(!c) return;
+  const dataVal = document.getElementById('agendar-data').value;
+  const horaVal = document.getElementById('agendar-hora').value;
+  if(!dataVal || !horaVal){ toast('Selecione a data e a hora antes de enviar.','err'); return; }
+  const primeiroNome = (c.nome||'').split(' ')[0];
+  const dataFmt = new Date(dataVal+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  const msg = `Olá, ${primeiroNome}!\n\nGostaria de agendar uma entrevista com você na Lojas CEM em Barra Mansa no dia ${dataFmt}. Podemos agendar às ${horaVal}?`;
+  const tel = (c.telefone||'').replace(/\D/g,'').slice(-11);
+  const url = `https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`;
+
+  // Salva data/hora no candidato automaticamente
+  const idx = candidates.findIndex(x=>x.id===_agendarId);
+  if(idx>=0){
+    candidates[idx].dataEntrevista = dataVal;
+    candidates[idx].horaEntrevista = horaVal;
+    saveData();
+  }
+
+  window.open(url, '_blank');
+  closeAgendar();
+  toast('✅ WhatsApp aberto! Data da entrevista salva.');
+}
+
+// ==================== STATISTICS ====================
+let _statsCharts = {};
+
+function setStatsPeriod(mode){
+  const now = new Date();
+  let from, to;
+  if(mode==='month'){
+    from = localDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    to   = localDate(new Date(now.getFullYear(), now.getMonth()+1, 0));
+  } else if(mode==='quarter'){
+    const q = Math.floor(now.getMonth()/3);
+    from = localDate(new Date(now.getFullYear(), q*3, 1));
+    to   = localDate(new Date(now.getFullYear(), q*3+3, 0));
+  } else {
+    // All time
+    const dates = candidates.map(c=>c.dataRecebimento).filter(Boolean).sort();
+    from = dates[0] || '2026-01-01';
+    to   = localDate();
+  }
+  document.getElementById('stats-from').value = from;
+  document.getElementById('stats-to').value   = to;
+  renderStats();
+}
+
+function renderStats(){
+  const from = document.getElementById('stats-from')?.value;
+  const to   = document.getElementById('stats-to')?.value;
+  const hoje = localDate();
+
+  // Filter candidates by period (dataRecebimento)
+  let pool = candidates;
+  if(from && to){
+    pool = candidates.filter(c=>{
+      const d = c.dataRecebimento || '';
+      return d >= from && d <= to;
+    });
+    document.getElementById('stats-period-label').textContent =
+      `Período: ${fmtDate(from)} a ${fmtDate(to)} — ${pool.length} currículo(s)`;
+  } else {
+    document.getElementById('stats-period-label').textContent = 'Selecione o período para analisar';
+  }
+
+  // ---- Summary cards ----
+  const s3   = pool.filter(c=>c.classificacao===3);
+  const s2   = pool.filter(c=>c.classificacao===2);
+  const s1   = pool.filter(c=>c.classificacao===1);
+  const fp   = pool.filter(c=>c.classificacao===0);
+  const agendados  = pool.filter(c=>!c.entrevistado && c.dataEntrevista && c.dataEntrevista>=hoje);
+  const entrev     = pool.filter(c=>c.entrevistado);
+  const aprovados  = pool.filter(c=>c.resultadoEntrevista==='aprovado');
+  const reprovados = pool.filter(c=>c.resultadoEntrevista==='reprovado');
+  const contratados= pool.filter(c=>c.resultadoEntrevista==='contratado');
+  const desistentes= pool.filter(c=>c.resultadoEntrevista==='desistente');
+
+  document.getElementById('stats-summary-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-num">${pool.length}</div><div class="stat-lbl">Total Currículos</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--gold)">${s3.length}</div><div class="stat-lbl">⭐⭐⭐ 3 Estrelas</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#3b82f6">${s2.length}</div><div class="stat-lbl">⭐⭐ 2 Estrelas</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--g500)">${s1.length}</div><div class="stat-lbl">⭐ 1 Estrela</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--red)">${fp.length}</div><div class="stat-lbl">Fora do Perfil</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#1d6fc4">${agendados.length}</div><div class="stat-lbl">Entrev. Agendadas</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#22c55e">${aprovados.length}</div><div class="stat-lbl">Aprovados</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--red)">${reprovados.length}</div><div class="stat-lbl">Reprovados</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#065f46">${contratados.length}</div><div class="stat-lbl">🏆 Contratados</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#92400e">${desistentes.length}</div><div class="stat-lbl">🚫 Desistentes</div></div>
+  `;
+
+  // ---- Charts ----
+  // Destroy existing charts
+  Object.values(_statsCharts).forEach(ch=>{ try{ ch.destroy(); }catch(e){} });
+  _statsCharts = {};
+
+  // By function
+  const funcs = {};
+  pool.forEach(c=>{ if(c.vaga){ funcs[c.vaga]=(funcs[c.vaga]||0)+1; } });
+  _statsCharts.func = renderStatsChart('st-func','bar',Object.keys(funcs),Object.values(funcs),
+    ['#C9A02C','#1d3050','#22c55e','#3b82f6','#f59e0b','#8b5cf6','#ec4899']);
+
+  // By stars
+  _statsCharts.stars = renderStatsChart('st-stars','doughnut',
+    ['3 Estrelas','2 Estrelas','1 Estrela','Fora do Perfil'],
+    [s3.length, s2.length, s1.length, fp.length],
+    ['#f59e0b','#3b82f6','#8a96a8','#ef4444']);
+
+  // Interview results
+  _statsCharts.result = renderStatsChart('st-result','doughnut',
+    ['Aprovados','Reprovados','Pendentes','Contratados','Desistentes'],
+    [aprovados.length, reprovados.length,
+     pool.filter(c=>c.resultadoEntrevista==='pendente').length,
+     contratados.length, desistentes.length],
+    ['#22c55e','#ef4444','#f59e0b','#065f46','#92400e']);
+
+  // Candidate status
+  _statsCharts.status = renderStatsChart('st-status','doughnut',
+    ['Não Entrevistados','Agendados','Entrevistados','Contratados','Desistentes'],
+    [pool.filter(c=>!c.entrevistado && !c.dataEntrevista).length,
+     agendados.length, entrev.length, contratados.length, desistentes.length],
+    ['#d0d7e2','#93c5fd','#22c55e','#065f46','#92400e']);
+
+  // ---- Lists ----
+  // Top candidates for interview
+  const topStats = pool.filter(c=>c.classificacao===3 && !['aprovado','contratado','desistente'].includes(c.resultadoEntrevista) && !(c.dataEntrevista && c.dataEntrevista>=hoje));
+  document.getElementById('stats-top-list').innerHTML = topStats.length ? topStats.map(c=>`
+    <div style="padding:8px 0;border-bottom:1px solid var(--g200);display:flex;align-items:center;gap:8px;cursor:pointer" onclick="openDetail('${c.id}')">
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:13px">${c.nome}</div>
+        <div style="font-size:12px;color:var(--g500)">${c.vaga||'—'} · ${c.cidade||'—'}</div>
+      </div>
+      ${c.telefone?`<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAgendar('${c.id}')">📅</button>`:''}
+    </div>`).join('') : '<p style="color:var(--g500);font-size:13px">Nenhum candidato recomendado no período.</p>';
+
+  // Scheduled interviews
+  const agendadosList = pool.filter(c=>!c.entrevistado && c.dataEntrevista && c.dataEntrevista>=hoje)
+    .sort((a,b)=>a.dataEntrevista.localeCompare(b.dataEntrevista));
+  document.getElementById('stats-agend-list').innerHTML = agendadosList.length ? agendadosList.map(c=>`
+    <div style="padding:8px 0;border-bottom:1px solid var(--g200);cursor:pointer" onclick="openDetail('${c.id}')">
+      <div style="font-weight:600;font-size:13px">${c.nome}</div>
+      <div style="font-size:12px;color:#1d6fc4">📅 ${fmtDate(c.dataEntrevista)}${c.horaEntrevista?' às '+c.horaEntrevista:''}</div>
+      <div style="font-size:12px;color:var(--g500)">${c.vaga||'—'}</div>
+    </div>`).join('') : '<p style="color:var(--g500);font-size:13px">Nenhuma entrevista agendada no período.</p>';
+
+  // Contratados
+  document.getElementById('stats-contratados-list').innerHTML = contratados.length ? `
+    <table style="width:100%;font-size:13px;border-collapse:collapse">
+      <thead><tr style="color:var(--g500);font-size:11px;text-transform:uppercase">
+        <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--g200)">Nome</th>
+        <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--g200)">Função</th>
+        <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--g200)">Nota Final</th>
+        <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--g200)">Data Entrevista</th>
+      </tr></thead>
+      <tbody>${contratados.map(c=>`
+        <tr onclick="openDetail('${c.id}')" style="cursor:pointer">
+          <td style="padding:8px 0;border-bottom:1px solid var(--g100);font-weight:600">${c.nome}</td>
+          <td style="padding:8px 0;border-bottom:1px solid var(--g100)">${c.vaga||'—'}</td>
+          <td style="padding:8px 0;border-bottom:1px solid var(--g100)">${c.notaFinal||'—'}</td>
+          <td style="padding:8px 0;border-bottom:1px solid var(--g100)">${fmtDate(c.dataEntrevista)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : '<p style="color:var(--g500);font-size:13px">Nenhum contratado no período selecionado.</p>';
+}
+
+function renderStatsChart(id, type, labels, data, colors){
+  const el = document.getElementById(id);
+  if(!el) return null;
+  if(_statsCharts[id]) { try{ _statsCharts[id].destroy(); }catch(e){} }
+  const total = data.reduce((a,b)=>a+b,0);
+  const chart = new Chart(el, {
+    type,
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderWidth:type==='doughnut'?2:0, borderRadius:type==='bar'?4:0, borderColor:'#fff' }] },
+    options:{
+      responsive:true,
+      plugins:{
+        legend:{ position:'bottom', labels:{font:{size:11},boxWidth:12,padding:8} },
+        tooltip:{ callbacks:{ label:ctx=>{ const t=total?Math.round(ctx.raw/total*100):0; return ` ${ctx.label}: ${ctx.raw} (${t}%)`; } } }
+      },
+      scales: type==='bar'?{ y:{ beginAtZero:true, ticks:{stepSize:1}, grace:'15%' } }:{}
+    },
+    plugins:[labelPlugin]
+  });
+  return chart;
+}
+
+// ==================== PDF EXPORT ====================
+function exportRelatorioPDF(){
+  const from = document.getElementById('stats-from')?.value;
+  const to   = document.getElementById('stats-to')?.value;
+  const hoje = localDate();
+
+  let pool = candidates;
+  if(from && to) pool = candidates.filter(c=>{ const d=c.dataRecebimento||''; return d>=from && d<=to; });
+
+  const s3 = pool.filter(c=>c.classificacao===3);
+  const s2 = pool.filter(c=>c.classificacao===2);
+  const s1 = pool.filter(c=>c.classificacao===1);
+  const fp = pool.filter(c=>c.classificacao===0);
+  const agendados   = pool.filter(c=>!c.entrevistado && c.dataEntrevista && c.dataEntrevista>=hoje).sort((a,b)=>a.dataEntrevista.localeCompare(b.dataEntrevista));
+  const aprovados   = pool.filter(c=>c.resultadoEntrevista==='aprovado');
+  const reprovados  = pool.filter(c=>c.resultadoEntrevista==='reprovado');
+  const contratados = pool.filter(c=>c.resultadoEntrevista==='contratado');
+  const desistentes = pool.filter(c=>c.resultadoEntrevista==='desistente');
+  const topRecom    = pool.filter(c=>c.classificacao===3 && !['aprovado','contratado','desistente'].includes(c.resultadoEntrevista) && !(c.dataEntrevista && c.dataEntrevista>=hoje));
+
+  const periodoLabel = (from && to) ? `${fmtDate(from)} a ${fmtDate(to)}` : 'Todo o período';
+
+  const rows = (arr, cols) => arr.length ? arr.map(c=>`<tr>${cols.map(fn=>`<td>${fn(c)}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${cols.length}" style="color:#888;font-style:italic">Nenhum registro</td></tr>`;
+
+  const html_report = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório R&S — ${periodoLabel}</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;margin:20px;max-width:900px}
+  h1{font-size:20px;color:#1d3050;border-bottom:3px solid #C9A02C;padding-bottom:8px;margin-bottom:4px}
+  h2{font-size:14px;color:#1d3050;margin:20px 0 8px;border-left:3px solid #C9A02C;padding-left:8px}
+  .period{color:#666;font-size:11px;margin-bottom:16px}
+  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px}
+  .sc{background:#f8f9fa;border:1px solid #e2e8f0;border-radius:6px;padding:8px;text-align:center}
+  .sc .n{font-size:20px;font-weight:bold;color:#1d3050}
+  .sc .l{font-size:10px;color:#666;margin-top:2px}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:11px}
+  th{background:#1d3050;color:#fff;padding:5px 8px;text-align:left;font-size:10px}
+  td{padding:5px 8px;border-bottom:1px solid #e2e8f0}
+  tr:nth-child(even) td{background:#f8faff}
+  .footer{margin-top:30px;padding-top:10px;border-top:1px solid #e2e8f0;color:#888;font-size:10px;text-align:center}
+  @media print{body{margin:0} .no-print{display:none}}
+</style></head><body>
+  <h1>📋 Relatório de Recrutamento & Seleção — CEM Filial 107</h1>
+  <div class="period">Período: <strong>${periodoLabel}</strong> &nbsp;|&nbsp; Gerado em: ${new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})}</div>
+
+  <div class="summary">
+    <div class="sc"><div class="n">${pool.length}</div><div class="l">Total Currículos</div></div>
+    <div class="sc"><div class="n" style="color:#b7791f">${s3.length}</div><div class="l">⭐⭐⭐ 3 Estrelas</div></div>
+    <div class="sc"><div class="n" style="color:#22c55e">${contratados.length}</div><div class="l">🏆 Contratados</div></div>
+    <div class="sc"><div class="n" style="color:#ef4444">${reprovados.length}</div><div class="l">✗ Reprovados</div></div>
+    <div class="sc"><div class="n" style="color:#92400e">${desistentes.length}</div><div class="l">🚫 Desistentes</div></div>
+  </div>
+
+  <h2>📊 Resumo por Classificação</h2>
+  <table><thead><tr><th>Classificação</th><th>Qtd</th><th>% do Total</th></tr></thead><tbody>
+    <tr><td>⭐⭐⭐ 3 Estrelas</td><td>${s3.length}</td><td>${pool.length?Math.round(s3.length/pool.length*100):0}%</td></tr>
+    <tr><td>⭐⭐ 2 Estrelas</td><td>${s2.length}</td><td>${pool.length?Math.round(s2.length/pool.length*100):0}%</td></tr>
+    <tr><td>⭐ 1 Estrela</td><td>${s1.length}</td><td>${pool.length?Math.round(s1.length/pool.length*100):0}%</td></tr>
+    <tr><td>Fora do Perfil</td><td>${fp.length}</td><td>${pool.length?Math.round(fp.length/pool.length*100):0}%</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>${pool.length}</strong></td><td><strong>100%</strong></td></tr>
+  </tbody></table>
+
+  <h2>⭐⭐⭐ Candidatos Recomendados para Entrevista</h2>
+  <table><thead><tr><th>Nome</th><th>Função</th><th>Cidade</th><th>Telefone</th><th>Formação</th></tr></thead>
+  <tbody>${rows(topRecom,[c=>c.nome,c=>c.vaga||'—',c=>c.cidade||'—',c=>c.telefone||'—',c=>(c.formacao||'—').substring(0,50)])}</tbody></table>
+
+  <h2>🗓️ Entrevistas Agendadas (Pendentes)</h2>
+  <table><thead><tr><th>Nome</th><th>Função</th><th>Data</th><th>Hora</th><th>Telefone</th></tr></thead>
+  <tbody>${rows(agendados,[c=>c.nome,c=>c.vaga||'—',c=>fmtDate(c.dataEntrevista),c=>c.horaEntrevista||'—',c=>c.telefone||'—'])}</tbody></table>
+
+  <h2>🏆 Contratados no Período</h2>
+  <table><thead><tr><th>Nome</th><th>Função</th><th>Nota Final</th><th>Data Entrevista</th><th>Parecer</th></tr></thead>
+  <tbody>${rows(contratados,[c=>c.nome,c=>c.vaga||'—',c=>c.notaFinal||'—',c=>fmtDate(c.dataEntrevista),c=>(c.parecer||'—').substring(0,80)])}</tbody></table>
+
+  <h2>✗ Reprovados no Período</h2>
+  <table><thead><tr><th>Nome</th><th>Função</th><th>Data Entrevista</th><th>Motivo (Observações)</th></tr></thead>
+  <tbody>${rows(reprovados,[c=>c.nome,c=>c.vaga||'—',c=>fmtDate(c.dataEntrevista),c=>(c.observacoes||'—').substring(0,80)])}</tbody></table>
+
+  <h2>🚫 Desistentes no Período</h2>
+  <table><thead><tr><th>Nome</th><th>Função</th><th>Telefone</th><th>Observações</th></tr></thead>
+  <tbody>${rows(desistentes,[c=>c.nome,c=>c.vaga||'—',c=>c.telefone||'—',c=>(c.observacoes||'—').substring(0,80)])}</tbody></table>
+
+  <div class="footer">Relatório gerado automaticamente pelo sistema R&S — CEM Filial 107 · Barra Mansa, RJ</div>
+  <div class="no-print" style="margin-top:20px;text-align:center">
+    <button onclick="window.print()" style="padding:10px 24px;background:#1d3050;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">🖨️ Imprimir / Salvar PDF</button>
+  </div>
+</body></html>`;
+
+  const win = window.open('','_blank');
+  win.document.write(html_report);
+  win.document.close();
+  setTimeout(()=>win.print(), 800);
+}
+
+
+// ==================== NOTIFICAÇÕES DE ENTREVISTA ====================
+const _TG_TOKEN = '8635461679:AAG6Pu4AQOqajgTsTx3qp4NWcY9vAjuNPDg';
+const _TG_CHAT  = '7151326827';
+
+function sendTelegram(msg){
+  fetch(`https://api.telegram.org/bot${_TG_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ chat_id: _TG_CHAT, text: msg, parse_mode: 'HTML' })
+  }).catch(()=>{});
+}
+
+// Persiste keys já disparadas no localStorage (sobrevive a recarregamentos)
+function _loadNotifFired(){
+  try {
+    const today = localDate();
+    const saved = JSON.parse(localStorage.getItem('rs_notifFired')||'[]');
+    // Mantém só as de hoje para não acumular lixo
+    return new Set(saved.filter(k=>k.includes(today)));
+  } catch(e){ return new Set(); }
+}
+function _saveNotifFired(set){
+  try {
+    const today = localDate();
+    localStorage.setItem('rs_notifFired', JSON.stringify([...set].filter(k=>k.includes(today))));
+  } catch(e){}
+}
+let _notifFired = _loadNotifFired();
+
+function _dispararNotif(msg, key){
+  if(_notifFired.has(key)) return;
+  _notifFired.add(key);
+  _saveNotifFired(_notifFired);
+  sendTelegram(msg);
+  if('Notification' in window && Notification.permission === 'granted'){
+    const linha1 = msg.replace(/<[^>]*>/g,'').split('\n')[0];
+    new Notification(linha1, { tag: key });
+  }
+}
+
+function checkEntrevistaNotifications(){
+  const now = new Date();
+  const today = localDate();
+  candidates.forEach(c=>{
+    if(!c.dataEntrevista || c.entrevistado) return;
+    if(c.dataEntrevista !== today) return;
+    if(!c.horaEntrevista){
+      const key = c.id + '_' + today + '_semhora';
+      _dispararNotif(`📅 <b>Entrevista hoje sem horário definido</b>\n👤 ${c.nome}\n💼 ${c.vaga||'—'}`, key);
+      return;
+    }
+    const dt = new Date(c.dataEntrevista + 'T' + c.horaEntrevista);
+    const diffMin = (dt - now) / 60000;
+    if(diffMin < 0) return;
+    if(diffMin <= 30){
+      const key30 = c.id + '_' + today + '_' + c.horaEntrevista + '_30';
+      _dispararNotif(`⏰ <b>Entrevista em ${Math.round(diffMin)} min</b>\n👤 ${c.nome}\n💼 ${c.vaga||'—'}\n🕐 ${c.horaEntrevista}`, key30);
+    }
+    if(diffMin <= 15){
+      const key15 = c.id + '_' + today + '_' + c.horaEntrevista + '_15';
+      _dispararNotif(`🔔 <b>Atenção! Entrevista em ${Math.round(diffMin)} min</b>\n👤 ${c.nome}\n💼 ${c.vaga||'—'}\n🕐 ${c.horaEntrevista}`, key15);
+    }
+  });
+}
+
+function sendResumoDoDia(){
+  const today = localDate();
+  const key = 'resumo_' + today;
+  if(_notifFired.has(key)) return;
+  const lista = candidates
+    .filter(c => c.dataEntrevista === today && !c.entrevistado)
+    .sort((a,b) => (a.horaEntrevista||'99:99').localeCompare(b.horaEntrevista||'99:99'));
+  if(lista.length === 0) return;
+  let msg = `📋 <b>Entrevistas de hoje (${lista.length})</b>\n`;
+  lista.forEach(c => {
+    msg += `\n👤 ${c.nome} — ${c.vaga||'—'}`;
+    if(c.horaEntrevista) msg += ` 🕐 ${c.horaEntrevista}`;
+  });
+  _dispararNotif(msg, key);
+}
+
+function initNotificacoes(){
+  if('Notification' in window && Notification.permission === 'default'){
+    Notification.requestPermission();
+  }
+  setTimeout(sendResumoDoDia, 5000);
+  setInterval(checkEntrevistaNotifications, 30000);
+  setTimeout(checkEntrevistaNotifications, 4000);
+}
+
+// ==================== INIT ====================
+document.querySelectorAll('.nav-item[data-page]').forEach(el=>{
+  el.addEventListener('click',()=>{
+    const pg = el.dataset.page;
+    if(pg === _currentPage){
+      navigate(pg, true);
+    } else {
+      navigate(pg);
+    }
+  });
+});
+document.getElementById('modal-overlay').addEventListener('click',e=>{
+  if(e.target===document.getElementById('modal-overlay')) closeModal();
+});
+document.getElementById('hdr-date').innerHTML = new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+loadPerfis();
+(async()=>{
+  const _ov = document.getElementById('loading-overlay');
+  if(_ov) _ov.style.display='flex';
+  await loadData();
+  renderDashboard();
+  if(_ov) _ov.style.display='none';
+  initNotificacoes();
+})();
+</script>
+</body></html>
